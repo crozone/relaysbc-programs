@@ -57,7 +57,7 @@ isprime_2	incjeq	isprime_sqrt, isprime_ret	; If loop counter = 0, isprime_div = 
 	st	isprime_div, div_divisor
 	jsr	div_ret, div
 	jne	div_remainder, isprime_2	; Check if remainder was 0. If it wasn't, we might still have a prime. Check next divisor.
-	st	div_quotient, isprime_res
+	st	isprime_div, isprime_res
 isprime_ret	jmp	0
 
 ; Integer square root
