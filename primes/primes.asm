@@ -37,13 +37,16 @@ sprimes_ret	jmp	0
 ;
 	org	0x20
 isprime_n	skip	1	; The number to check for primeness
-isprime_res	skip	1	; The result
+isprime_res	skip	1	; The result. 0 if n was prime, or smaller factor if not prime.
+isprime_resb	skip	1	; Second result. 0 if n was prime, or larger factor if prime.
 isprime_div	skip	1	; The current test divisor (i)
 isprime_sqrt	skip	1	; The square root of n
 isprime	jo	isprime_n, isprime_1	; Check if the number is odd. If so, do division search.			
 	st	#2, isprime_res	; We have an even number, it is divisible by 2
+	lsrto	isprime_n, isprime_resb	; The larger factor is just n / 2, or n >> 1.
 	jmp	isprime_ret
 isprime_1	clr	isprime_res	; Clear the result, so in the case of a prime we can return directly.
+	clr	isprime_resb	; Clear b result as well.
 	st	#2, isprime_div	; Start dividing from 3 (starts at 2 but incremented by 1 on first isprime_2 loop)
 	st	isprime_n, sqrt_n
 	jsr	sqrt_ret, sqrt
@@ -57,7 +60,8 @@ isprime_2	incjeq	isprime_sqrt, isprime_ret	; If loop counter = 0, isprime_div = 
 	st	isprime_div, div_divisor
 	jsr	div_ret, div
 	jne	div_remainder, isprime_2	; Check if remainder was 0. If it wasn't, we might still have a prime. Check next divisor.
-	st	isprime_div, isprime_res
+	st	isprime_div, isprime_res	; Not a prime. Store smaller factor in res.
+	st	div_quotient, isprime_resb	; Store larger factor in resb
 isprime_ret	jmp	0
 
 ; Integer square root
