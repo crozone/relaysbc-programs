@@ -47,15 +47,16 @@ isprime	jo	isprime_n, isprime_1	; Check if the number is odd. If so, do division
 	jmp	isprime_ret
 isprime_1	clr	isprime_res	; Clear the result, so in the case of a prime we can return directly.
 	clr	isprime_resb	; Clear b result as well.
-	st	#2, isprime_div	; Start dividing from 3 (starts at 2 but incremented by 1 on first isprime_2 loop)
+	st	#1, isprime_div	; Start dividing from 3 (starts at 1 but incremented by 2 on first isprime_2 loop)
 	st	isprime_n, sqrt_n
 	jsr	sqrt_ret, sqrt
 	st	sqrt_res, isprime_sqrt
 	rsb	isprime_sqrt, isprime_div	; Use isprime_sqrt as loop counter. isprime_sqrt = -isprime_sqrt + isprime_div
 	dec	isprime_sqrt	; Since incjne increments before the check, we need to subtract one more
 	jge	isprime_sqrt, isprime_ret	; If isprime_sqrt >= 0, the loop is already ended (the number is prime).
-isprime_2	incjeq	isprime_sqrt, isprime_ret	; If loop counter = 0, isprime_div = sqrt(n). We've exhausted all divisors and therefore have a prime.
-	inc	isprime_div		; i++ and do the next search
+isprime_2	addto	#2, isprime_sqrt	; Only attempt to divide by odd numbers, since we already know prime isn't even.
+	jge	isprime_sqrt, isprime_ret	; If loop counter >= 0, isprime_div >= sqrt(n). We've exhausted all divisors and therefore have a prime.
+	addto	#2, isprime_div		; i+=2 and do the next search
 	st	isprime_n, div_dividend
 	st	isprime_div, div_divisor
 	jsr	div_ret, div
