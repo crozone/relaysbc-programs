@@ -1,0 +1,192 @@
+Pass 1...
+
+0 errors detected in pass 1
+
+Pass 2...
+1                       ; Prime Number Calculator (with hysteresis)
+2                       ; Ryan Crosby 2018
+3                       
+4                       ; Run
+5       05              	org 0x05
+6       05 4800_0210    run	st	#0x02, sprimes_n	; Start prime search from 2
+7       06 4800_8011    	st	#0x80, sprimes_arrptr	; Write results into array starting at 0x80
+8       07 8408_2213    	jsr	sprimes_ret, sprimes
+9       08 c810_ff00    	halt
+10                      
+11                      ; Prime Search Function
+12                      ;
+13                      ; Searches for prime numbers, starting at n.
+14                      ; When primes are found, they are saved to an array, and printed to console.
+15                      ;
+16      10              	org	0x10
+17      10 c810_ff00    sprimes_n	data	0x00
+18      11 c810_ff00    sprimes_arrptr	data	0x00
+19      12 c810_ff00    sprimes_arrlen	data	0x00
+20      13 4800_0012    sprimes	clr	sprimes_arrlen
+21      14 0800_1124    	st	sprimes_arrptr, isprime_arrptr	; This never changes, so we don't need to copy it inside the loop.
+22      15 0800_1023    sprimes_start	st	sprimes_n, isprime_n
+23      16 0800_1225    	st	sprimes_arrlen, isprime_arrlen
+24      17 8408_4d2b    	jsr	isprime_ret, isprime
+25      18 006a_2621    	jne	isprime_res, sprimes_next
+27      19 0800_111b    	st	sprimes_arrptr, sprimes_ind	; Prime store instruction with pointer
+28      1a 0880_121b    	addto	sprimes_arrlen, sprimes_ind	; Add extra offset to pointer
+29      1b 0800_1000    sprimes_ind	st	sprimes_n, 0	; Write prime to array
+30      1c 4880_0112    	inc	sprimes_arrlen	; arrlen++;
+31      1d 0800_1068    	st	sprimes_n, print_n
+32      1e 8408_7069    	jsr	print_ret, print	; Print number
+33      1f d800_2c00    	outc	#0x2C	; Print comma
+34      20 d800_2000    	outc	#0x20	; Print space
+35      21 802a_1015    sprimes_next	incjne	sprimes_n, sprimes_start
+36      22 4018_ff00    sprimes_ret	jmp	0
+38                      ; IsPrime Function
+39                      ;
+40                      ; Determines if n is prime using trial division by the previous prime numbers.
+41                      ; Returns 0 if prime, or the factors of n if not.
+42                      ;
+43      23              isprime_n	skip	1	; The number to check for primeness
+44      24              isprime_arrptr	skip	1	; The address of the array of previous primes
+45      25              isprime_arrlen	skip	1	; The length of the previous primes array
+46      26              isprime_res	skip	1	; The result. 0 if n was prime, or smaller factor if not prime.
+47      27              isprime_resb	skip	1	; Second result. 0 if n was prime, or larger factor if prime.
+48      28              isprime_divi	skip	1	; The current test divisor index into arr
+49      29              isprime_div	skip	1	; The value of the current divisor
+50      2a              isprime_sqrt	skip	1	; The square root of n
+51      2b 0202_2336    isprime	jo	isprime_n, isprime_1	; Check if the number is odd. If so, do division search.
+52      2c 48e0_0223    	rsbto	#0x02, isprime_n
+53      2d 006a_2332    	jne	isprime_n, isprime_even
+54      2e 4880_0223    	addto	#0x02, isprime_n	; Special case for 2
+55      2f 4800_0026    	clr	isprime_res
+56      30 4800_0027    	clr	isprime_resb
+57      31 4018_ff4d    	jmp	isprime_ret
+58      32 4880_0223    isprime_even	addto	#0x02, isprime_n	; Revert rsbto
+59      33 4800_0226    	st	#0x02, isprime_res	; We have an even number, it is divisible by 2
+60      34 0a00_2327    	lsrto	isprime_n, isprime_resb	; The larger factor is just n / 2, or n >> 1.
+61      35 4018_ff4d    	jmp	isprime_ret
+62      36 4800_0026    isprime_1	clr	isprime_res	; Clear the result, so in the case of a prime we can return directly.
+63      37 4800_0027    	clr	isprime_resb	; Clear b result as well.
+64      38 4800_0128    	st	#1, isprime_divi	; Start from index 1, since index 0 is preloaded with 2 and we have already checked for even-ness.
+65      39 0800_234e    	st	isprime_n, sqrt_n	; Find the square root of n. We never have to divide by more than this.
+66      3a 8408_5550    	jsr	sqrt_ret, sqrt
+67      3b 0800_4f2a    	st	sqrt_res, isprime_sqrt
+68      3c 08e0_2528    isprime_2	rsbto	isprime_arrlen, isprime_divi	; Check if our index is above arrlen, and if so return prime.
+69      3d 0069_284d    	jge	isprime_divi, isprime_ret	; If isprime_divi >= isprime_arrlen, jump to return
+70      3e 0880_2528    	addto	isprime_arrlen, isprime_divi	; Revert rsbto
+71      3f 0800_2442    	st	isprime_arrptr, isprime_load	; Put pointer to current divisor into add below.
+72      40 0880_2842    	addto	isprime_divi, isprime_load	; Add divisor index offset
+73      41 4800_0029    	clr	isprime_div
+74      42 8080_2900    isprime_load	add	isprime_div, 0	; Load current divisor into div
+75      43 4880_0128    	inc	isprime_divi	; Incrememnt array index
+76      44 08e0_2a29    	rsbto	isprime_sqrt, isprime_div	; Check if the current divisor is greater than sqrt(n), and if so return prime.
+77      45 006e_294d    	jhi	isprime_div, isprime_ret	; If isprime_div > isprime_sqrt, jump to return.
+78      46 0880_2a29    	addto	isprime_sqrt, isprime_div	; Revert rsbto
+79      47 0800_2358    	st	isprime_n, div_dividend	; Do division
+80      48 0800_2959    	st	isprime_div, div_divisor
+81      49 8408_675b    	jsr	div_ret, div
+82      4a 006a_573c    	jne	div_remainder, isprime_2	; Check if remainder was 0. If it wasn't, we might still have a prime. Check next divisor.
+83      4b 0800_2926    	st	isprime_div, isprime_res	; Remainder was 0, not a prime. Store smaller factor in res.
+84      4c 0800_5627    	st	div_quotient, isprime_resb	; Store larger factor in resb
+85      4d 4018_ff00    isprime_ret	jmp	0	; Return.
+86                      
+87                      ; Integer square root
+88      4e              sqrt_n	skip	1	; Find square root of this
+89      4f              sqrt_res	skip	1	; Result ends up here
+90                      
+91      50 4800_ff4f    sqrt	st	#0xFF, sqrt_res
+92      51 4880_024f    sqrt_1	addto	#2, sqrt_res
+93      52 08e0_4f4e    	rsbto	sqrt_res, sqrt_n
+94      53 006c_0051    	jcs	sqrt_1
+95      54 0a00_4f4f    	lsr	sqrt_res
+96      55 4018_ff00    sqrt_ret	jmp	0
+97                      
+98                      ; Divide
+99                      
+100     56              div_quotient	skip	1
+101     57              div_remainder	skip	1
+102     58              div_dividend	skip	1
+103     59              div_divisor	skip	1
+104     5a              div_count	skip	1
+105     5b 4800_0057    div	clr	div_remainder
+106     5c 4800_f85a    	st	#-8, div_count
+107     5d 0880_5858    div_lop	lsl	div_dividend
+108     5e 0890_5757    	rol	div_remainder
+109     5f 08e0_5957    	rsbto	div_divisor, div_remainder
+110     60 0064_0064    	jcc	div_toomuch
+111     61 08a0_5656    	lslo	div_quotient
+112     62 802a_5a5d    	incjne	div_count, div_lop
+113     63 4018_ff67    	jmp	div_ret
+114     64 0880_5957    div_toomuch	addto	div_divisor, div_remainder
+115     65 0880_5656    	lsl	div_quotient
+116     66 802a_5a5d    	incjne	div_count, div_lop
+117     67 4018_ff00    div_ret	jmp	0
+118                     
+119                     ; Print ASCII number (2 digits only!)
+120     68              print_n	skip	1
+121     69 0800_6858    print	st	print_n, div_dividend
+122     6a 4800_0a59    	st	#0x0A, div_divisor
+123     6b 8408_675b    	jsr	div_ret, div
+124     6c 4880_3056    	addto	#0x30, div_quotient	; Convert left digit to ASCII number
+125     6d 4880_3057    	addto	#0x30, div_remainder	; Convert right digit to ASCII number
+126     6e 9800_5600    	outc	div_quotient	; Print left digit
+127     6f 9800_5700    	outc	div_remainder	; Print right digit
+128     70 4018_ff00    print_ret	jmp	0
+
+0 errors detected in pass 2
+
+Symbol table:
+div = 0x5b
+div_count = 0x5a
+div_dividend = 0x58
+div_divisor = 0x59
+div_lop = 0x5d
+div_quotient = 0x56
+div_remainder = 0x57
+div_ret = 0x67
+div_toomuch = 0x64
+isprime = 0x2b
+isprime_1 = 0x36
+isprime_2 = 0x3c
+isprime_arrlen = 0x25
+isprime_arrptr = 0x24
+isprime_div = 0x29
+isprime_divi = 0x28
+isprime_even = 0x32
+isprime_load = 0x42
+isprime_n = 0x23
+isprime_res = 0x26
+isprime_resb = 0x27
+isprime_ret = 0x4d
+isprime_sqrt = 0x2a
+print = 0x69
+print_n = 0x68
+print_ret = 0x70
+run = 0x5
+sprimes = 0x13
+sprimes_arrlen = 0x12
+sprimes_arrptr = 0x11
+sprimes_ind = 0x1b
+sprimes_n = 0x10
+sprimes_next = 0x21
+sprimes_ret = 0x22
+sprimes_start = 0x15
+sqrt = 0x50
+sqrt_1 = 0x51
+sqrt_n = 0x4e
+sqrt_res = 0x4f
+sqrt_ret = 0x55
+
+Memory image:
+05: 48000210 48008011 84082213
+08: c810ff00
+10: c810ff00 c810ff00 c810ff00 48000012 08001124 08001023 08001225 84084d2b
+18: 006a2621 0800111b 0880121b 08001000 48800112 08001068 84087069 d8002c00
+20: d8002000 802a1015 4018ff00
+2b: 02022336 48e00223 006a2332 48800223 48000026
+30: 48000027 4018ff4d 48800223 48000226 0a002327 4018ff4d 48000026 48000027
+38: 48000128 0800234e 84085550 08004f2a 08e02528 0069284d 08802528 08002442
+40: 08802842 48000029 80802900 48800128 08e02a29 006e294d 08802a29 08002358
+48: 08002959 8408675b 006a573c 08002926 08005627 4018ff00
+50: 4800ff4f 4880024f 08e04f4e 006c0051 0a004f4f 4018ff00
+5b: 48000057 4800f85a 08805858 08905757 08e05957
+60: 00640064 08a05656 802a5a5d 4018ff67 08805957 08805656 802a5a5d 4018ff00
+69: 08006858 48000a59 8408675b 48803056 48803057 98005600 98005700
+70: 4018ff00
