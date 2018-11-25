@@ -48,30 +48,30 @@ isprime_resb	skip	1	; Second result. 0 if n was prime, or larger factor if prime
 isprime_divi	skip	1	; The current test divisor index into arr
 isprime_div	skip	1	; The value of the current divisor
 isprime_sqrt	skip	1	; The square root of n
-isprime	jo	isprime_n, isprime_1	; Check if the number is odd. If so, do division search.
-	rsbto	#0x02, isprime_n
-	jne	isprime_n, isprime_even
-	addto	#0x02, isprime_n	; Special case for 2
+isprime	rsbto	#0x02, isprime_n	; Check if the number is 2 or less, if so, return prime.
+	jgt	isprime_n, isprime_gt2
+	addto	#0x02, isprime_n	; Revert rsbto
 	clr	isprime_res
 	clr	isprime_resb
-	jmp	isprime_ret
-isprime_even	addto	#0x02, isprime_n	; Revert rsbto
+	jmp	isprime_ret		; Return prime.
+isprime_gt2	addto	#0x02, isprime_n	; Revert rsbto
+	jo	isprime_n, isprime_dodiv	; Check if the number is odd. If so, do division search.
 	st	#0x02, isprime_res	; We have an even number, it is divisible by 2
 	lsrto	isprime_n, isprime_resb	; The larger factor is just n / 2, or n >> 1.
 	jmp	isprime_ret
-isprime_1	clr	isprime_res	; Clear the result, so in the case of a prime we can return directly.
+isprime_dodiv	clr	isprime_res	; Clear the result, so in the case of a prime we can return directly.
 	clr	isprime_resb	; Clear b result as well.
 	st	#1, isprime_divi	; Start from index 1, since index 0 is preloaded with 2 and we have already checked for even-ness.
 	st	isprime_n, sqrt_n	; Find the square root of n. We never have to divide by more than this.
 	jsr	sqrt_ret, sqrt
 	st	sqrt_res, isprime_sqrt
-isprime_2	rsbto	isprime_arrlen, isprime_divi	; Check if our index is above arrlen, and if so return prime.
+isprime_loop	rsbto	isprime_arrlen, isprime_divi	; Check if our index is above arrlen, and if so return prime.
 	jge	isprime_divi, isprime_ret	; If isprime_divi >= isprime_arrlen, jump to return
 	addto	isprime_arrlen, isprime_divi	; Revert rsbto
-	st	isprime_arrptr, isprime_load	; Put pointer to current divisor into add below.
-	addto	isprime_divi, isprime_load	; Add divisor index offset
+	st	isprime_arrptr, isprime_ld	; Put pointer to current divisor into add below.
+	addto	isprime_divi, isprime_ld	; Add divisor index offset
 	clr	isprime_div
-isprime_load	add	isprime_div, 0	; Load current divisor into div
+isprime_ld	add	isprime_div, 0	; Load current divisor into div
 	inc	isprime_divi	; Incrememnt array index
 	rsbto	isprime_sqrt, isprime_div	; Check if the current divisor is greater than sqrt(n), and if so return prime.
 	jhi	isprime_div, isprime_ret	; If isprime_div > isprime_sqrt, jump to return.
@@ -79,7 +79,7 @@ isprime_load	add	isprime_div, 0	; Load current divisor into div
 	st	isprime_n, div_dividend	; Do division
 	st	isprime_div, div_divisor
 	jsr	div_ret, div
-	jne	div_remainder, isprime_2	; Check if remainder was 0. If it wasn't, we might still have a prime. Check next divisor.
+	jne	div_remainder, isprime_loop	; Check if remainder was 0. If it wasn't, we might still have a prime. Check next divisor.
 	st	isprime_div, isprime_res	; Remainder was 0, not a prime. Store smaller factor in res.
 	st	div_quotient, isprime_resb	; Store larger factor in resb
 isprime_ret	jmp	0	; Return.
