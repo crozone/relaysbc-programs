@@ -35,38 +35,40 @@ sprimes_ret	jmp	0
 ; Determines if n is prime using trial division.
 ; Returns 0 if prime, or the smaller factor of n if not.
 ;
-	org	0x20
 isprime_n	skip	1	; The number to check for primeness
 isprime_res	skip	1	; The result. 0 if n was prime, or smaller factor if not prime.
 isprime_resb	skip	1	; Second result. 0 if n was prime, or larger factor if prime.
 isprime_div	skip	1	; The current test divisor (i)
 isprime_sqrt	skip	1	; The square root of n
-isprime	jo	isprime_n, isprime_1	; Check if the number is odd. If so, do division search.			
-	st	#2, isprime_res	; We have an even number, it is divisible by 2
+isprime	rsbto	#0x02, isprime_n	; Check if the number is 2 or less, if so, return prime.
+	jgt	isprime_n, isprime_gt2
+	addto	#0x02, isprime_n	; Revert rsbto
+	clr	isprime_res
+	clr	isprime_resb
+	jmp	isprime_ret	; Return prime.
+isprime_gt2	addto	#0x02, isprime_n	; Revert rsbto
+	jo	isprime_n, isprime_dodiv	; Check if the number is odd. If so, do division search.
+	st	#0x02, isprime_res	; We have an even number, it is divisible by 2
 	lsrto	isprime_n, isprime_resb	; The larger factor is just n / 2, or n >> 1.
 	jmp	isprime_ret
-isprime_1	clr	isprime_res	; Clear the result, so in the case of a prime we can return directly.
+isprime_dodiv	clr	isprime_res	; Clear the result, so in the case of a prime we can return directly.
 	clr	isprime_resb	; Clear b result as well.
 	st	#1, isprime_div	; Start dividing from 3 (starts at 1 but incremented by 2 on first isprime_2 loop)
 	st	isprime_n, sqrt_n
 	jsr	sqrt_ret, sqrt
 	st	sqrt_res, isprime_sqrt
-	rsb	isprime_sqrt, isprime_div	; Use isprime_sqrt as loop counter. isprime_sqrt = -isprime_sqrt + isprime_div
-	dec	isprime_sqrt	; Since incjne increments before the check, we need to subtract one more
-	jge	isprime_sqrt, isprime_ret	; If isprime_sqrt >= 0, the loop is already ended (the number is prime).
-isprime_2	addto	#2, isprime_sqrt	; Only attempt to divide by odd numbers, since we already know prime isn't even.
-	jge	isprime_sqrt, isprime_ret	; If loop counter >= 0, isprime_div >= sqrt(n). We've exhausted all divisors and therefore have a prime.
+isprime_loop	rsbto	#2, isprime_sqrt	; Use sqrt as a loop coutner that counts down.
+	jlt	isprime_sqrt, isprime_ret	; If loop counter < 0, isprime_div >= sqrt(n). We've exhausted all divisors and therefore have a prime.
 	addto	#2, isprime_div		; i+=2 and do the next search
 	st	isprime_n, div_dividend
 	st	isprime_div, div_divisor
 	jsr	div_ret, div
-	jne	div_remainder, isprime_2	; Check if remainder was 0. If it wasn't, we might still have a prime. Check next divisor.
+	jne	div_remainder, isprime_loop	; Check if remainder was 0. If it wasn't, we might still have a prime. Check next divisor.
 	st	isprime_div, isprime_res	; Not a prime. Store smaller factor in res.
 	st	div_quotient, isprime_resb	; Store larger factor in resb
 isprime_ret	jmp	0
 
 ; Integer square root
-	org	0x40
 sqrt_n	skip	1	; Find square root of this
 sqrt_res	skip	1	; Result ends up here
 
@@ -79,7 +81,6 @@ sqrt_ret	jmp	0
 
 ; Divide
 
-        org     0x50
 div_quotient	skip	1
 div_remainder	skip	1
 div_dividend	skip	1
@@ -100,7 +101,6 @@ div_toomuch	addto	div_divisor, div_remainder
 div_ret	jmp	0
 
 ; Print ASCII number (2 digits only!)
-	org 0x70
 print_n	skip	1
 print	st	print_n, div_dividend
 	st	#0x0A, div_divisor
