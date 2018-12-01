@@ -26,7 +26,9 @@ The fastest version of the prime number search. Comfortably fits within SRAM.
 
 Any primes found are saved to an array starting at 0x80, and printed to the console in ASCII decimal form.
 
-**Run from address 0x05.**
+This version also has a feature that erases the prime array before starting the prime search.
+
+**Run from address 0x02.**
 
 **View primes starting at address 0x80.**
 

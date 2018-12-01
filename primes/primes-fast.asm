@@ -4,11 +4,32 @@
 ; This version of the code is supposed to be as fast and messy as possible.
 ;
 
-; Run
-	org 0x05
-run	st	#0x80, sprimes_arrptr	; Write results into array starting at 0x80
-	jsr	sprimes_ret, sprimes
+; Catch
+	org	0x00
 	halt
+
+; Config
+	org	0x01
+arr_start	data	0x80
+
+; Run
+	org	0x02
+run	st	arr_start, clrp_arrhead
+	jsr	clrp_ret, clrp	; Erase any existing primes in the primes array
+	st	arr_start, sprimes_arrptr	
+	jsr	sprimes_ret, sprimes	; Start finding primes
+run_ret	jmp	0
+
+; Clear primes array function
+clrp_tmp	skip	1	; Needed for indirect load
+clrp	st	arr_start, clrp_arrhead	; Use clrp_ind1 as the array head pointer
+clrp_loop	clr	clrp_tmp	; Prep tmp for load
+clrp_arrhead	add	clrp_tmp, 0	; Load value from array head
+	jeq	clrp_tmp, clrp_ret	; Stop as soon as we hit a 0x00 in the array
+	st	clrp_arrhead, clrp_ind
+clrp_ind	clr	0	; Current array head is not 0x00, so clear it
+	incjne	clrp_arrhead, clrp_loop	; Increment array head pointer and loop
+clrp_ret	jmp	0	; Return
 
 ; Prime Search Function
 ;
