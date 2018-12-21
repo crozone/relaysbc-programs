@@ -62,7 +62,6 @@ sprimes_stind1	st	#2, 0	; Write 2 to the start of the primes array.
 	; Prep the isprime function
 	st	#3, isprime_n	; Start the prime search from three, since we've already found 2.
 	st	sprimes_arrptr, isprime_arrptr	; The array pointer never changes in the loop, so we only need to copy it once.
-	st	#1, isprime_arrlen	; The array has a starting length of 1, since it now contains 2.
 	
 	; Start the main prime search loop.
 sprimes_start	jsr	isprime_ret, isprime	; Check if the current isprime_n is prime.
@@ -72,7 +71,6 @@ sprimes_start	jsr	isprime_ret, isprime	; Check if the current isprime_n is prime
 	st	sprimes_arrhead, sprimes_stind2	; Prime store instruction with pointer
 sprimes_stind2	st	isprime_n, 0	; Write prime to array
 	inc	sprimes_arrhead	; Increment array head
-	inc	isprime_arrlen	; Increment array length
 	jsr	dechlp_print_ret, dechlp_print	; Print prime to console
 	outc	#0x2C	; Print comma
 	outc	#0x20	; Print space
@@ -126,7 +124,6 @@ dechlp_print_ret	jmp	0
 ;
 isprime_n	skip	1	; The number to check for primeness
 isprime_arrptr	skip	1	; The address of the array of previous primes
-isprime_arrlen	skip	1	; The length of the previous primes array
 isprime_res	skip	1	; The result. 0 if n was prime, or smaller factor if not prime.
 isprime_resb	skip	1	; Second result. 0 if n was prime, or larger factor if prime.
 isprime_arri	skip	1	; The current test divisor index into arr
@@ -140,18 +137,12 @@ isprime_start	clr	isprime_res	; Clear the result, so in the case of a prime we c
 	st	#0xFF, div_quotient	; We need this to start from largest number for sqrt check below.
 	st	#1, isprime_arri	; Start from index 1, since index 0 is preloaded with 2. We already know n is not even, so no point dividing by 2.
 
-	; Index check:
-	;
-	; Check if we have exhausted all divisors. If so, we have a prime.
-isprime_loop	rsbto	isprime_arrlen, isprime_arri	; Check if our index is above arrlen, and if so return prime.
-	jge	isprime_arri, isprime_ret	; If isprime_arri >= isprime_arrlen, jump to return since we have exhausted all primes.
-	addto	isprime_arrlen, isprime_arri	; Revert rsbto
-
 	; Load divisor out of array from current arri index.
-	st	isprime_arrptr, isprime_ld	; Put pointer to current divisor into add below.
+isprime_loop	st	isprime_arrptr, isprime_ld	; Put pointer to current divisor into add below.
 	addto	isprime_arri, isprime_ld	; Add divisor index offset
 	clr	isprime_div	; Prepare to do an indirect load with add. For this, destination must be 0.
 isprime_ld	add	isprime_div, 0	; Load current divisor from arri into div
+	jeq	isprime_div, isprime_ret	; Return if the divisor is 0. If it's 0, we have reached the end of the divisor array (zero terminated)
 	
 	; Sqrt check:
 	;
