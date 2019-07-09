@@ -1,0 +1,384 @@
+Pass 1...
+
+0 errors detected in pass 1
+
+Pass 2...
+1                       ; Calculate pi using Machin's formula
+2                       ; Dag Stroman, March 19 2019
+3                       ;
+4                       ;
+5                       ; Machin's formula:
+6                       ;   pi/4=4*arctan(1/5)-arctan(1/239)
+7                       ; where
+8                       ;   arctan=(1/x)=1/x-1/3*x**3+1/5*x**5-...
+9                       ;
+10                      ; Rewriten to be pi/16=arctan(1/5)-arctan(1/239)/4. 
+11                      ;
+12                      ; The divide by 4 is easily implemented as two right shifts. Having the result in format
+13                      ; pi/16 is very nice since it is the same as pi/0x10 meaning that the binary result needs
+14                      ; no further transformation in order to be used in binary to decimal conversion.
+15                      ;
+16                      ; The code is a strightforward 'hack' and may be more optimized for size and
+17                      ; likely also speed. It will also be fairly easy to increase precision (if made shorter).
+18                      ; Could possible be rewritten to use pointers but this may hurt performance.
+19                      ;
+20                      ; Program start is at 0x35 and almost fills memory. There are about 14 bytes left :-).
+21                      ; 
+22                      ; By monitoring address 'total' (0x23) during execution the intermediary results of arctan 
+23                      ; can be viewed. At completion, the value of pi in hex is also viewed there. The following
+24                      ; intermediate results should be displayed:
+25                      ;
+26                      ; arctan(1/5):
+27                      ;   0x33333333
+28                      ;   0x32846ff5
+29                      ;   0x3288a1b2
+30                      ;   0x32888305
+31                      ;   0x328883f9
+32                      ;   0x328883f2
+33                      ; arctan(1/239):
+34                      ;   0x0112358e
+35                      ;   0x01123526
+36                      ; pi/16=arctan(1/5)-arctan(1/239)>>2:
+37                      ;   0x3243f6a9
+38                      ;
+39                      ; Program output to TTL one '.' per round of division and a '!' when
+40                      ; calculation is complete. There are two divisions per round in arclop, so there will be
+41                      ; two '.' per intermediary result. The final result is converted to base 10 and printed
+42                      ; to TTL:
+43                      ;
+44                      ;    > g 35
+45                      ;    ................!
+46                      ;    pi=3.14259265
+47                      ;
+48                      ; Program takes about 30 minutes to complete with moderate speed.
+49                      ;
+50                      ; Corresponding c-code for arctan:
+51                      ;
+52                      ;int arctan_invx(int x, unsigned power) {
+53                      ;  int total;
+54                      ;  int x_sq;
+55                      ;  int divisor;
+56                      ;  int delta = 0;
+57                      ;  int negate;
+58                      ;
+59                      ;  total = power;
+60                      ;  x_sq = x*x;
+61                      ;  divisor = 1;
+62                      ;  negate = 0;
+63                      ;
+64                      ;  while (1){
+65                      ;    negate = ~negate;
+66                      ;    divisor +=2;
+67                      ;    power = power/x_sq;
+68                      ;    delta = power / divisor;
+69                      ;    if (delta == 0) {
+70                      ;      break;
+71                      ;    }
+72                      ;    if (negate) {
+73                      ;      delta = -delta;
+74                      ;    }
+75                      ;    total += delta;
+76                      ;  }
+77                      ;  return (total);
+78                      ;}
+79                      ;
+80                      ;
+81                      ; Some variables used by main	
+82      00                     org 0x00
+83      00              pi		skip 4
+84      04              char		skip 1
+85      05              mcount  	skip 1
+86      06              product		skip 4
+87      0a              m10		skip 4
+89                      ; Variables used by Long Divide
+90      0e              count	    	skip 1
+91      0f              quotient    	skip 4
+92      13              remainder   	skip 4
+93      17              dividend    	skip 4
+94      1b              ldivisor    	skip 4
+95                      
+96                      ; Variables used by the arctan loop
+97      1f              power	    	skip 4
+98      23              total		skip 4
+99      27              x_sq		skip 4	
+100     2b              adivisor 	skip 4
+101     2f              delta   	skip 4
+102     33              negate  	skip 1	
+103                     
+104                     ; main 
+105     35              	org 0x35
+107     35 d800_0a00    	outc 	#0x0a			; CR/LF
+108     36 d800_0d00    	outc 	#0x0d
+109                     ; precalculation of power=one/x=0x0100000000/5=0x33333333.
+110                     ; This will put the fixed decimal point in after the MSB nibble. 
+111     37 4800_331f    	st	#0x33, power	
+112     38 4800_3320    	st	#0x33, power+1
+113     39 4800_3321    	st	#0x33, power+2
+114     3a 4800_3322    	st	#0x33, power+3
+115     3b 0800_1f23    	st	power, total		; total = power
+116     3c 0800_2024    	st	power+1, total+1
+117     3d 0800_2125    	st	power+2, total+2
+118     3e 0800_2226    	st	power+3, total+3
+119     3f 4800_1927    	st	#0x19, x_sq		; x_sq=x*x=5*5=0x00000019
+120     40 4800_0028    	st	#0x00, x_sq+1
+121     41 4800_0029    	st	#0x00, x_sq+2
+122     42 4800_002a    	st	#0x00, x_sq+3
+123     43 4800_012b    	st	#1, adivisor		; adivisor = 1
+124     44 4800_002c    	st	#0, adivisor+1	
+125     45 4800_002d    	st	#0, adivisor+2	
+126     46 4800_002e    	st	#0, adivisor+3
+127     47 4800_0033    	st	#0, negate		; negate = 0
+128     48 8408_cfa1    	jsr	arcrtn,arclop		; arctan(1/5)
+129     49 0800_2300    	st	total,pi		; pi = result
+130     4a 0800_2401    	st	total+1,pi+1
+131     4b 0800_2502    	st	total+2,pi+2
+132     4c 0800_2603    	st	total+3,pi+3
+133                     ; precalculation of power=one/x=0x0100000000/239=0x0112358e
+134     4d 4800_8e1f    	st	#0x8e, power	
+135     4e 4800_3520    	st	#0x35, power+1
+136     4f 4800_1221    	st	#0x12, power+2
+137     50 4800_0122    	st	#0x01, power+3
+138     51 0800_1f23    	st	power, total		; total = power
+139     52 0800_2024    	st	power+1, total+1
+140     53 0800_2125    	st	power+2, total+2
+141     54 0800_2226    	st	power+3, total+3
+142     55 4800_2127    	st	#0x21, x_sq		; x_sq=239*239
+143     56 4800_df28    	st	#0xdf, x_sq+1
+144     57 4800_0029    	st	#0x00, x_sq+2
+145     58 4800_002a    	st	#0x00, x_sq+3
+146     59 4800_012b    	st	#1, adivisor		; adivisor = 1
+147     5a 4800_002c    	st	#0, adivisor+1	
+148     5b 4800_002d    	st	#0, adivisor+2	
+149     5c 4800_002e    	st	#0, adivisor+3
+150     5d 4800_0033    	st	#0, negate
+151     5e 8408_cfa1    	jsr	arcrtn,arclop		; arctan(1/239)
+152     5f 0a00_2626    	lsr	total+3			; shift right (div by 2)
+153     60 0a10_2525    	ror	total+2		
+154     61 0a10_2424    	ror	total+1
+155     62 0a10_2323    	ror	total
+156     63 0a00_2626    	lsr	total+3
+157     64 0a10_2525    	ror	total+2			; shift right (div by 2)
+158     65 0a10_2424    	ror	total+1
+159     66 0a10_2323    	ror	total
+160     67 08e0_2300    	rsbto	total,pi		; subtract from pi
+161     68 08d0_2401    	rsbcto	total+1,pi+1
+162     69 08d0_2502    	rsbcto	total+2,pi+2
+163     6a 08d0_2603    	rsbcto	total+3,pi+3
+164     6b 0800_0023    	st 	pi, total		; total = pi (ie show on display)
+165     6c 0800_0124    	st 	pi+1,total+1
+166     6d 0800_0225    	st 	pi+2,total+2
+167     6e 0800_0326    	st 	pi+3,total+3
+168     6f d800_2100    	outc 	#0x21			; Done so far. print '!'			
+169     70 d800_0a00    	outc 	#0x0a			; CR/LF
+170     71 d800_0d00    	outc 	#0x0d
+171     72 d800_7000            outc 	#0x70			; "pi="
+172     73 d800_6900    	outc 	#0x69
+173     74 d800_3d00    	outc 	#0x3d
+174     75 4800_f70e    	st 	#-9, count		; Print 9 base10 digits
+175     76 0800_0304    print	st 	pi+3,char		; get MSB  
+176     77 4980_f004    	andto 	#0xf0,char		; Get MSB nibble. This will be 0x30 first time.
+177     78 4980_0f03    	andto 	#0x0f,pi+3		; Mask of MSB nibble from pi.
+178     79 0a00_0404    	lsr 	char			; Shift down (ie 0x30 -> 0x03)
+179     7a 0a00_0404    	lsr 	char			
+180     7b 0a00_0404    	lsr 	char
+181     7c 0a00_0404    	lsr 	char
+182     7d 4880_3004    	addto 	#0x30,char		; Make it ascii number
+183     7e 9800_0400    	outc 	char			; print
+184     7f 4880_cd04            addto	#-0x33,char		; Dirty trick. Check if this is 3
+185     80 006a_0482    	jne 	char,nopnt		; If not, goto  nopnt
+186     81 d800_2e00    	outc 	#0x2e			; else print '.'
+187                     
+188                     ; start pi = pi * 10.
+189     82 4800_0006    nopnt	st      #0, product		; clr result
+190     83 4800_0007            st      #0, product+1
+191     84 4800_0008            st      #0, product+2
+192     85 4800_0009            st      #0, product+3
+193     86 4800_0a0a    	st	#10, m10		; multiplicator is 10
+194     87 4800_000b    	st 	#0x00, m10+1
+195     88 4800_000c    	st 	#0x00, m10+2
+196     89 4800_000d    	st 	#0x00, m10+3	
+197     8a 4800_e005            st      #-32, mcount		; shift counter
+198     8b 0880_0606    loop    lsl     product             	; left shift res
+199     8c 0890_0707            rol     product+1
+200     8d 0890_0808            rol     product+2
+201     8e 0890_0909            rol     product+3
+202     8f 0880_0a0a            lsl     m10			; left shift m10
+203     90 0890_0b0b            rol     m10+1
+204     91 0890_0c0c            rol     m10+2
+205     92 0890_0d0d            rol     m10+3
+206     93 0064_0098            jcc     over			; if carry is clear goto over
+207     94 0880_0006            addto   pi, product       	; otherwise add pi to product.
+208     95 0890_0107            adcto   pi+1, product+1
+209     96 0890_0208            adcto   pi+2, product+2
+210     97 0890_0309            adcto   pi+3, product+3
+212     98 802a_058b    over    incjne  mcount, loop		; jump to loop until done.
+214     99 0800_0600    	st	product,pi		; store product into pi
+215     9a 0800_0701    	st 	product+1,pi+1
+216     9b 0800_0802    	st 	product+2,pi+2
+217     9c 0800_0903    	st 	product+3,pi+3
+218     9d 802a_0e76    	incjne  count, print		; jump to print until done
+219     9e d800_0a00    	outc 	#0x0a			; CR/LF
+220     9f d800_0d00    	outc 	#0x0d
+221     a0 c810_ff00    	halt				; Done!
+222                     
+223                     ; this is the while loop of the arctan. See C-code for more info.
+225     a1 0800_1f17    	st	power, dividend	;	; dividend=power
+226     a2 0800_2018    	st	power+1, dividend+1
+227     a3 0800_2119    	st	power+2, dividend+2
+228     a4 0800_221a    	st	power+3, dividend+3
+229                     
+230     a5 0800_271b    	st	x_sq,ldivisor		; ldivisor = x_sq
+231     a6 0800_281c    	st	x_sq+1,ldivisor+1
+232     a7 0800_291d    	st	x_sq+2,ldivisor+2
+233     a8 0800_2a1e    	st	x_sq+3,ldivisor+3
+234                     
+235     a9 8408_f2d0    	jsr	divrtn, div		; quotient = power/x_sq
+236                     
+237     aa 0800_0f1f    	st 	quotient, power		; power = quotient 
+238     ab 0800_1020    	st	quotient+1, power+1
+239     ac 0800_1121    	st	quotient+2, power+2
+240     ad 0800_1222    	st	quotient+3, power+3
+241                     
+242     ae 0840_3333    	com 	negate			; negate = ~negate;
+244     af 4880_022b    	addto	#0x02,adivisor		; adivisor +=2
+245     b0 4890_002c    	adcto 	#0x00,adivisor+1
+246     b1 4890_002d    	adcto 	#0x00,adivisor+2
+247     b2 4890_002e    	adcto 	#0x00,adivisor+3
+248                     
+249     b3 0800_1f17    	st	power, dividend	;	; dividend=power
+250     b4 0800_2018    	st	power+1, dividend+1	
+251     b5 0800_2119    	st	power+2, dividend+2
+252     b6 0800_221a    	st	power+3, dividend+3
+253                     
+254     b7 0800_2b1b    	st	adivisor,ldivisor	; ldivisor=adivisor
+255     b8 0800_2c1c    	st	adivisor+1,ldivisor+1
+256     b9 0800_2d1d    	st	adivisor+2,ldivisor+2
+257     ba 0800_2e1e    	st	adivisor+3,ldivisor+3
+258                     
+259     bb 8408_f2d0    	jsr	divrtn, div		; quotient=power/adivisor
+260     bc 0800_0f2f    	st	quotient, delta		; delta = quotient 
+261     bd 0800_1030    	st	quotient+1, delta+1
+262     be 0800_1131    	st	quotient+2, delta+2
+263     bf 0800_1232    	st	quotient+3, delta+3
+264                     
+265     c0 006a_2fc5    	jne	delta, cont		; if (delta!=0) jump to cont
+266     c1 006a_30c5    	jne	delta+1,cont
+267     c2 006a_31c5    	jne	delta+2,cont
+268     c3 006a_32c5    	jne	delta+3,cont
+269     c4 4018_ffcf    	jmp 	arcrtn			; else we are done. Jump to arcrtn.
+271     c5 0062_33ca    cont    jeq	negate, noneg		; if (negate==0) jump to noneg
+272     c6 0860_2f2f    	neg 	delta			; else delta = -delta
+273     c7 0850_3030    	ngc 	delta+1
+274     c8 0850_3131    	ngc 	delta+2
+275     c9 0850_3232    	ngc 	delta+3
+276                     
+277     ca 0880_2f23    noneg	addto 	delta, total		; total = total + delta
+278     cb 0890_3024    	adcto 	delta+1, total+1
+279     cc 0890_3125    	adcto 	delta+2, total+2
+280     cd 0890_3226    	adcto 	delta+3, total+3
+281     ce 4018_ffa1    	jmp 	arclop			; jump to next turn in arcloop
+282     cf 4018_ff00    arcrtn	jmp 	0			; return to caller
+283                     
+285                     ; Division subroutine
+286     d0 4800_0013    div	clr	remainder		; clear reminder
+287     d1 4800_0014    	clr	remainder+1
+288     d2 4800_0015    	clr	remainder+2
+289     d3 4800_0016    	clr	remainder+3
+290     d4 4800_e00e    	st	#-32, count		; walk through all 32 bits 
+291     d5 0880_1717    divlop	lsl	dividend		; left shift dividend...
+292     d6 0890_1818    	rol	dividend+1
+293     d7 0890_1919    	rol	dividend+2
+294     d8 0890_1a1a    	rol	dividend+3
+295     d9 0890_1313    	rol	remainder		; ... carry shifted into remainder
+296     da 0890_1414    	rol	remainder+1
+297     db 0890_1515    	rol	remainder+2
+298     dc 0890_1616    	rol	remainder+3
+299     dd 08e0_1b13    	rsbto	ldivisor, remainder	; subtract ldivisor from remainder
+300     de 08d0_1c14    	rsbcto	ldivisor+1, remainder+1
+301     df 08d0_1d15    	rsbcto	ldivisor+2, remainder+2	
+302     e0 08d0_1e16    	rsbcto	ldivisor+3, remainder+3	
+303     e1 0064_00e8    	jcc	toomuch			; did not fit, goto toomuch
+304                     
+305     e2 08a0_0f0f    	lslo	quotient		; else left shift 1 into quotient.
+306     e3 0890_1010    	rol	quotient+1
+307     e4 0890_1111    	rol	quotient+2
+308     e5 0890_1212    	rol	quotient+3
+309     e6 802a_0ed5    	incjne	count, divlop		; if count!=0 goto divlop
+310     e7 4018_fff1    	jmp	divend			; done. Jump to divend
+311     e8 0880_1b13    toomuch	addto	ldivisor, remainder 	; add back ldivisor to remainder
+312     e9 0890_1c14    	adcto	ldivisor+1, remainder+1 
+313     ea 0890_1d15    	adcto	ldivisor+2, remainder+2 
+314     eb 0890_1e16    	adcto	ldivisor+3, remainder+3 
+315     ec 0880_0f0f    	lsl	quotient	       ; left shift 0 into quotient
+316     ed 0890_1010    	rol	quotient+1
+317     ee 0890_1111    	rol	quotient+2
+318     ef 0890_1212    	rol	quotient+3	
+319     f0 802a_0ed5    	incjne	count, divlop		; run through the whole division
+320     f1 d800_2e00    divend  outc 	#0x2e  			; print '.'
+321     f2 4018_ff00    divrtn	jmp	0			; return to caller
+322                     
+323                     
+324                     ;
+325                     ; end of file
+326                     
+
+0 errors detected in pass 2
+
+Symbol table:
+adivisor = 0x2b
+arclop = 0xa1
+arcrtn = 0xcf
+char = 0x4
+cont = 0xc5
+count = 0xe
+delta = 0x2f
+div = 0xd0
+divend = 0xf1
+dividend = 0x17
+divlop = 0xd5
+divrtn = 0xf2
+ldivisor = 0x1b
+loop = 0x8b
+m10 = 0xa
+main = 0x35
+mcount = 0x5
+negate = 0x33
+noneg = 0xca
+nopnt = 0x82
+over = 0x98
+pi = 0x0
+power = 0x1f
+print = 0x76
+product = 0x6
+quotient = 0xf
+remainder = 0x13
+toomuch = 0xe8
+total = 0x23
+x_sq = 0x27
+
+Memory image:
+35: d8000a00 d8000d00 4800331f
+38: 48003320 48003321 48003322 08001f23 08002024 08002125 08002226 48001927
+40: 48000028 48000029 4800002a 4800012b 4800002c 4800002d 4800002e 48000033
+48: 8408cfa1 08002300 08002401 08002502 08002603 48008e1f 48003520 48001221
+50: 48000122 08001f23 08002024 08002125 08002226 48002127 4800df28 48000029
+58: 4800002a 4800012b 4800002c 4800002d 4800002e 48000033 8408cfa1 0a002626
+60: 0a102525 0a102424 0a102323 0a002626 0a102525 0a102424 0a102323 08e02300
+68: 08d02401 08d02502 08d02603 08000023 08000124 08000225 08000326 d8002100
+70: d8000a00 d8000d00 d8007000 d8006900 d8003d00 4800f70e 08000304 4980f004
+78: 49800f03 0a000404 0a000404 0a000404 0a000404 48803004 98000400 4880cd04
+80: 006a0482 d8002e00 48000006 48000007 48000008 48000009 48000a0a 4800000b
+88: 4800000c 4800000d 4800e005 08800606 08900707 08900808 08900909 08800a0a
+90: 08900b0b 08900c0c 08900d0d 00640098 08800006 08900107 08900208 08900309
+98: 802a058b 08000600 08000701 08000802 08000903 802a0e76 d8000a00 d8000d00
+a0: c810ff00 08001f17 08002018 08002119 0800221a 0800271b 0800281c 0800291d
+a8: 08002a1e 8408f2d0 08000f1f 08001020 08001121 08001222 08403333 4880022b
+b0: 4890002c 4890002d 4890002e 08001f17 08002018 08002119 0800221a 08002b1b
+b8: 08002c1c 08002d1d 08002e1e 8408f2d0 08000f2f 08001030 08001131 08001232
+c0: 006a2fc5 006a30c5 006a31c5 006a32c5 4018ffcf 006233ca 08602f2f 08503030
+c8: 08503131 08503232 08802f23 08903024 08903125 08903226 4018ffa1 4018ff00
+d0: 48000013 48000014 48000015 48000016 4800e00e 08801717 08901818 08901919
+d8: 08901a1a 08901313 08901414 08901515 08901616 08e01b13 08d01c14 08d01d15
+e0: 08d01e16 006400e8 08a00f0f 08901010 08901111 08901212 802a0ed5 4018fff1
+e8: 08801b13 08901c14 08901d15 08901e16 08800f0f 08901010 08901111 08901212
+f0: 802a0ed5 d8002e00 4018ff00
