@@ -107,3 +107,9 @@ Program takes about 40 minutes to complete with moderate speed.
 Please note that the program is NOT reentrant, ie you have to load the complete program into memory if and when you want to run it again.
 
 Due to the program's size, at cannot fit in EEPROM.
+
+#### Demo
+
+This video shows the final calculation stage of `pi2.asm`, outputting Pi to both the serial console and the LCD display.
+
+https://www.youtube.com/watch?v=yid_RYGp4x0
