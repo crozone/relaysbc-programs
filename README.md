@@ -1,22 +1,38 @@
 # Relaysbc-programs
 Programs written for Joe Allen's Relay Trainer single board relay computer.
 
-## Helper methods:
+## Overview
 
-### Double-dabble
-Source: `double-dabble/double-dabble.asm`
+### Examples
 
-Assembled:  `double-dabble/double-dabble.lst`
+Example programs provided by Joe Allen are found in `examples/`
 
-**Run test program from address 0x10.**
+See `examples/README.md` for details.
 
-The double-dabble function converts a hex byte into a 3 digit packed BCD spanning one and a half bytes.
+Authors: Joe Allen
 
-The test program demonstrates the function by converting 243 into BCD using the `ddabble` function, before splitting out the nibbles and printing them individually as ASCII to the console.
-
-## Primes
+### Primes
 
 Prime search programs are found in `primes/`
 
 See `primes/README.md` for details.
 
+Authors: Ryan Crosby
+
+### Pi
+
+Pi calcualtion programs are found in `pi/`
+
+See `pi/README.md` for details.
+
+Authors: Dag Stroman
+
+### Other
+
+Other useful functions:
+
+* Double-dabble algorithm - converts a hex byte into a 3 digit packed BCD spanning one and a half bytes.
+
+See `other/README.md` for details.
+
+Authors: Ryan Crosby
