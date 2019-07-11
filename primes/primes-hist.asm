@@ -85,8 +85,9 @@ sprimes_stind2	st	isprime_n, 0	; Write prime to array
 	outc	#0x20	; Print space
 
 sprimes_next	addto	#2, isprime_n	; Increment the prime candidate. Jump by 2 to skip even numbers that can't be prime.
+	jcs	sprimes_ret	; If we overflowed the test prime (carry set), stop testing.
 	jsr	dechlp_inc2_ret, dechlp_inc2	; Increment decimal value of prime candidate by 2.
-	jne	sprimes_arrhead, sprimes_start	; Jump back to start of loop. Don't jump if we're out of memory for the array.
+	jmp	sprimes_start	; Jump back to start of loop.
 sprimes_ret	jmp	0	; Return to the calling function.
 
 ; Fast IsPrime Function with hysteresis
