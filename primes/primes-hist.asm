@@ -187,7 +187,7 @@ dechlp_overflow_1	inc	dechlp_2	; Increment the hundreds digit and return. Don't 
 ;
 ; This function prints the above decimal representation to the console. It handles the conversion to ASCII characters internally.
 ;
-dechlp_print	je	dechlp_2, dechlp_print_1	; Skip printing leading zero
+dechlp_print	jeq	dechlp_2, dechlp_print_1	; Skip printing leading zero
 	addto	#0x30, dechlp_2	; Convert to ASCII character
 	outc	dechlp_2	; Print hundreds digit
 	rsbto	#0x30, dechlp_2	; Revert ASCII conversion
