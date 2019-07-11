@@ -74,7 +74,7 @@ sprimes_stind1	st	#2, 0	; Write 2 to the start of the primes array.
 	
 	; Start the main prime search loop.
 sprimes_start	jsr	isprime_ret, isprime	; Check if the current isprime_n is prime.
-	jne	isprime_res, sprimes_next	; Restart the loop if we didn't find a prime.
+	jne	isprime_res, sprimes_next	; Move onto the next test number if we didn't find a prime.
 	
 	; We have a prime, write the prime to memory and print to console.
 	st	sprimes_arrhead, sprimes_stind2	; Prime store instruction with pointer
@@ -161,19 +161,20 @@ div_toomuch	addto	div_divisor, div_remainder
 	lsl	div_quotient
 	incjne	div_count, div_lop
 div_ret	jmp	0
+
 ; Track decimal representation of the prime for fast printing
 ;
-dechlp_0	skip	1	; Ones digit
-dechlp_1	skip	1	; Tens digit
-dechlp_2	skip	1	; Hundreds digit
+dechlp_0	skip	1	; Ones digit [0]
+dechlp_1	skip	1	; Tens digit [1]
+dechlp_2	skip	1	; Hundreds digit [2]
 
 ; Increment by 2 function.
 ;
 ; This function increments the above decimal representation by 2 every time it is run.
 ;
-dechlp_inc2	rsbto	#8, dechlp_0	; Increment the current decimal value by 2
-	jge	dechlp_0, dechlp_overflow_0	; If (([0] + 2) - 10) < 0, we have overflowed the ones digit.
-	addto	#10, dechlp_0	; No overflow on ones yet, add 10 on to accomplish overall [0] += 2
+dechlp_inc2	rsbto	#8, dechlp_0	; First subtract 8 to test if we're about to overflow the ones digit [0].
+	jge	dechlp_0, dechlp_overflow_0	; If (([0] + 2) - 10) < 0, we have overflowed the ones digit [0].
+	addto	#10, dechlp_0	; No overflow on ones yet, add 10 on to accomplish an overall [0] += 2
 dechlp_inc2_ret	jmp	0	; Return subroutine
 dechlp_overflow_0	rsbto	#9, dechlp_1
 	jge	dechlp_1, dechlp_overflow_1	; IF (([1] + 1) - 10) < 0, we have overflowed the tens digit.
