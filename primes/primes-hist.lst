@@ -171,7 +171,7 @@ Pass 2...
 187                     ;
 188                     ; This function prints the above decimal representation to the console. It handles the conversion to ASCII characters internally.
 189                     ;
-190     67 020a_5c6b    dechlp_print	je	dechlp_2, dechlp_print_1	; Skip printing leading zero
+190     67 0062_5c6b    dechlp_print	jeq	dechlp_2, dechlp_print_1	; Skip printing leading zero
 191     68 4880_305c    	addto	#0x30, dechlp_2	; Convert to ASCII character
 192     69 9800_5c00    	outc	dechlp_2	; Print hundreds digit
 193     6a 48e0_305c    	rsbto	#0x30, dechlp_2	; Revert ASCII conversion
@@ -254,6 +254,6 @@ Memory image:
 50: 08904949 08e04b49 00640056 08a04848 802a4c4f 4018ff59 08804b49 08804848
 58: 802a4c4f 4018ff00
 5d: 48e0085a 00695a61 48800a5a
-60: 4018ff00 48e0095b 00695b65 48800a5b 4018ff60 4880015c 4018ff60 020a5c6b
+60: 4018ff00 48e0095b 00695b65 48800a5b 4018ff60 4880015c 4018ff60 00625c6b
 68: 4880305c 98005c00 48e0305c 006a5b6e 006a5c6e 4018ff71 4880305b 98005b00
 70: 48e0305b 4880305a 98005a00 48e0305a 4018ff00
