@@ -78,8 +78,8 @@ Pass 2...
 84      24 d800_2c00    	outc	#0x2C	; Print comma
 85      25 d800_2000    	outc	#0x20	; Print space
 86                      
-87      26 4880_022b    sprimes_next	addto	#2, isprime_n	; Increment the prime candidate. Jump by 2 to skip even numbers that can't be prime.
-88      27 006c_002a    	jcs	sprimes_ret	; If we overflowed the test prime (carry set), stop testing.
+87      26 8022_2b2a    sprimes_next	incjeq	isprime_n, sprimes_ret	; Increment twice,
+88      27 8022_2b2a    	incjeq	isprime_n, sprimes_ret		; if we overflowed the test prime (carry set), stop testing.
 89      28 8408_605d    	jsr	dechlp_inc2_ret, dechlp_inc2	; Increment decimal value of prime candidate by 2.
 90      29 4018_ff1e    	jmp	sprimes_start	; Jump back to start of loop.
 91      2a 4018_ff00    sprimes_ret	jmp	0	; Return to the calling function.
@@ -245,7 +245,7 @@ Memory image:
 08: 0800010a 48000007 80800700 0062070f 08000a0d 48000000 802a0a09 4018ff00
 12: 08001011 08001114 48000200 48800111 d8003200 d8002c00
 18: d8002000 4800035a 4800005b 4800005c 4800032b 0800102c 84084731 006a2d26
-20: 08001121 08002b00 48800111 84087467 d8002c00 d8002000 4880022b 006c002a
+20: 08001121 08002b00 48800111 84087467 d8002c00 d8002000 80222b2a 80222b2a
 28: 8408605d 4018ff1e 4018ff00
 31: 02022b35 4800022d 0a002b2e 4018ff47 4800002d 4800002e 4800ff48
 38: 4800012f 08002c3c 08802f3c 48000030 80803000 00623047 08e03048 00664847
