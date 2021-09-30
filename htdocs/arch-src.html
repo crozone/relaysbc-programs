@@ -1,0 +1,176 @@
+<h3>Architecture</h3>
+
+<p>The computer is a two-address machine, meaning that each instruction
+includes two direct memory addresses from which to fetch the
+operands.  This eliminates the need for a register or accumulator to
+provide one of the operands.  A triple-port memory is needed to
+support this: one port for the fetched instruction and two ports for
+the data.</p>
+
+<p>All instructions execute in one single-phase clock cycle, so there
+is no required sequencing logic.  Aside from the 4-bit condition code,
+there are only 12 control signals.  There is no instruction decoder,
+instead the instruction is wide enough to fit all 12 control signals
+directly, similar to a horizontally microcoded design.  Many
+instructions are possible based on the many possible combinations of
+the control signals.</p>
+
+<p>The datapath is 8-bits, but instructions are 32-bits.  Instructions
+and data are both stored together in memory.  There are 256 memory
+locations.  Each location holds a 32-bit instruction.  The lowest
+8-bits of each location (corresponding to the B address field of the
+instruction) are used for data and can be read from or written to by
+the running program.</p>
+
+<p>This is a "semi" <a href="http://en.wikipedia.org/wiki/Von_Neumann_architecture">Von Neumann architecture</a>.  Data and code are stored
+together in memory like a standard Von Neumann machine, but only
+part of the instruction can be accessed or modified by the program. 
+Self-modified code is used to implement indexing and subroutine
+linkage by having the program write to this part of an instruction. 
+This is akin to early computers such as <a href="http://univac1.0catch.com/">UNIVAC-I</a> and
+<a href="http://www.cs.colby.edu/djskrien/IASSim/">Princeton IAS</a>.</p>
+
+<p>Originally it was intended to implement a clone of the 12-bit <a href="https://en.wikipedia.org/wiki/PDP-8">Digital
+PDP-8</a> minicomputer, but the result would have been a slower, more expensive
+computer (needing about 280 relays, with no I/O).  One aspect of this
+original PDP-8 idea remains in the design: like the PDP-8, the ALU supports
+only add and AND.  Exclusive-OR and OR have to be implemented with a
+sequence of instructions.</p>
+
+<p>It can be argued that the triple-port memory is "cheating" (meaning
+that early computers would not have used such a memory), but we are
+already cheating by using semiconductor memory, so we might as well
+make the most of it.</p>
+
+<h3>Block Diagram</h3>
+
+<p>The memory, the immediate data MUX and the single-phase clock are
+implemented in a microcontroller (in silicon).  The CPU, including ALU, PC,
+carry-flag, input port, output port and condition logic is implemented in 83
+DPDT relays.</p>
+
+<img src="block.gif"/>
+
+<p>The immediate data MUX should also be implemented in relays, but it was
+added later as an afterthought.  Immediate mode is not strictly needed since
+you can always store data in an addressed memory location.  On the other
+hand, immediate mode saves memory and is convenient.</p>
+
+<p>Another subtle bit of cheating is the ability to write back either to the
+A address or the B address.  There should be a MUX to select between the two
+addresses, but it's implemented in the microcontroller as part of the
+memory.</p>
+
+<h3>PC (Program Counter)</h3>
+
+<p>There is an 8-bit Program Counter which points to the instruction in
+memory to execute.  The program counter is normally incremented after each
+instruction, but it can be replaced with the B-field of the instruction for
+jumps.</p>
+
+</p>The next instruction address (PC + 1) can be written to memory to
+record a subroutine return point.</p>
+
+<p>The program counter has its own incrementer which requires 7 relays. 
+This is cheaper and faster than the alternative of having the ALU increment
+the PC.  For the ALU to do it would require a 4 relay MUX to feed the PC
+through the ALU, plus at least 5 more relays to MUX the ALU control signals
+and otherwise deal with the non-single cycle / per instruction operation. 
+An ALU operation could not have been done in the same cycle that the PC is
+being incremented, so performance would have been halved.</p>
+
+<h3>Carry Flag</h3>
+<p>The carry-out bit of the ALU (possibly modified by the rotator) is
+saved into the carry flag after every executed instruction.  In other words,
+all instructions modify the carry flag.</p>
+
+<h3>Memory</h3>
+
+<p>The memory should be thought-of as having three ports: one for the
+instruction and two for data.  When an instruction is read, the data from
+the addresses given by the A and B fields of the instructions are also read. 
+The instruction's results can optionally be written back to either the
+address given in the A field or the B field.</p3>
+
+<h3>Instruction Format</h3>
+
+<p>All instructions have this format:</p>
+
+<img src="insn.gif"/>
+
+<p>Key:</p>
+<ul>
+<li><b>B</b>: B memory address field</li>
+<li><b>A</b>: A memory address field or immediate data</li>
+<li><b>CC</B>: Condition code</li>
+<li><b>cen</b>: Carry (into ALU) enable (otherwise it's forced to zero).</li>
+<li><b>cinv</b>: Carry (into ALU) invert.</li>
+<li><b>com</b>: 1's Complement A operand</li>
+<li><b>ben</b>: B operand enable (otherwise it's forced to zero)</li>
+<li><b>ror</b>: Rotate ALU result right</li>
+<li><b>jsr</b>: pc+1 is used as result instead of ALU result</li>
+<li><b>wrb</b>: write result to B</li>
+<li><b>out</b>: write result to output port</li>
+<li><b>in</b>: replace lower 4 bits of A operand with input port</li>
+<li><b>imm</b>: Use A field as literal data instead of reading data from A
+address</li>
+<li><b>wra</b>: write result to A instead of to B</li>
+</ul>
+
+<h3>Instruction sequence</h3>
+
+<p>All instructions execute in a single cycle, and always follow this logical
+sequence:</p>
+
+<ol>
+<li>First, the 32-bit instruction located at the address specified by
+the program counter is fetched from memory.</li>
+
+<li>Next, the two 8-bit arguments, A and B, are fetched from memory from
+the addresses given by the A and B fields of the instruction.</li>
+
+<li>If both 'wra' and 'wrb' are set, the clock is stopped and execution
+is halted until the user presses the 'step' or 'go' buttons.</li>
+
+<li>The instruction is executed.  The operation which is performed is
+determined by the control bits of the instruction.  The data flow is as
+follows:</li>
+<ol>
+<li>The operands for the ALU, A and B, are pre-processed:</li>
+<ol>
+<li>If the 'imm' bit is set, the A field of the instruction is used
+directly as the A operand, otherwise the data in the memory addressed by the
+A field is used.</li>
+<li>If the 'in' bit is set, the lower 4-bits of the A operand are
+replaced with data from the input port.</li>
+<li>If the 'com' (complement) bit is set, the A operand is inverted (the
+input port data will be inverted if this bit is set).</li>
+<li>If the 'ben' (B-enable) bit is set, the B argument is allowed to
+pass in to the ALU, otherwise it is set to zero.</li>
+<li>If the 'cen' (Carry-enable) bit is set, the carry flag is allowed to
+pass in to the ALU, otherwise it is set to zero.</li>
+<li>If the 'cinv' (Carry-invert) bit is set, the carry to the ALU is
+inverted.  This happens after the carry enable gate, so if 'cen' is zero,
+and 'cinv' is one, then the ALU will get a carry input of one.</li>
+</ol>
+<li>The ALU performs two operations in parallel: Add: A + B + Carry and
+bitwise-AND: A &amp; B.</li>
+<li>If the 'and' bit is set, the AND result is selected, otherwise the
+ADD result is selected.</li>
+<li>If the 'ror' bit is set, the result is rotated to the right by 1
+bit.  The carry flag will be placed into bit 7 and bit 0 of the result will
+replace the carry output from the ALU.</li>
+<li>The carry flag is updated (either with the carry output from the ALU
+or bit 0 of the result if 'ror' was set).</li>
+<li>If the 'out' bit is set, the result is written to the output port.</li>
+<li>If 'jsr' bit is set, PC + 1 is used for the result instead of the
+ALU output.</li>
+<li>If the 'wrb' (write to b) bit is set, the result is written to
+memory, to the address specified by the B field of the instruction.  If the
+'wra' (write to a) bit is set, the result is written to memory, to the
+address specified by the A field of the instruction.</li>
+</ol>
+<li>The Condition Code field specifies various conditions to check, and
+if the result of this check is true, a jump takes place: the PC is replaced
+with the contents of the B field of the instruction instead of with PC + 1</li>
+</ol>

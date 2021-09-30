@@ -1,0 +1,154 @@
+<h3>Here is a description of the microcontroller / semi-conductor section of
+the Relay Trainer</h3>
+
+<h3>Keypad / Display</h3>
+
+<p>A Microchip
+<a href="http://www.microchip.com/wwwproducts/Devices.aspx?dDocName=en546017">PIC16F720</a> microcontroller is used to scan the keypad and LED
+display.  The 16F720 was chosen because of its extreme low cost, in-circuit
+flash programming capability, capability to run at 5V, built-in calibrated
+oscillator and built-in UART.  It is programmed in assembly language.  My
+long standing strategy for dealing with PIC assembly language is to use a
+macro library which makes it look more like a Motorola 6800.</p>
+
+<p>A 6-pin PIC <a href="http://en.wikipedia.org/wiki/In-circuit_serial_programming">ICSP</a> connector is provided to allow the PIC16F720 to be
+programmed in circuit with a <a href="http://www.microchip.com/stellent/idcplg?IdcService=SS_GET_PAGE&nodeId=1406&dDocName=en538340">PICkit 3</a>
+in-circuit debugger.</p>
+
+<p>The 16F720 communicates with the main microcontroller over an 8-bit
+asynchronous serial interface at 9600 BAUD.  The following codes are sent by
+the keypad / display microcontroller when keypad keys are pressed or
+released:</p>
+
+<ul>
+  <li>0x00 - 0x0F: for Hexadecimal digits</li>
+  <li>0x10: Deposit key</li>
+  <li>0x11: Address key</li>
+  <li>0x12: Decrement key</li>
+  <li>0x13: Increment key</li>
+  <li>0x14: Step key</li>
+  <li>0x15: Run key</li>
+  <li>0x16: 2nd (freq) key</li>
+  <li>0x17: Backspace key</li>
+</ul>
+
+<p>Codes are also sent when keys are released.  The same codes as above are
+send, but with bit 7 set.</p>
+
+<p>The following codes are received by the keypad / display microcontroller
+for the LED display:</p>
+
+<ul>
+  <li>0x2d: Dash -</li>
+  <li>0x2e: Turn decimal point on digit to the left of cursor</li>
+  <li>0x30 - 0x39: Decimal digits</li>
+  <li>0x61 - 0x66: Letters A - F</li>
+  <li>0x20: Space</li>
+  <li>0x40 - 0x49: Set cursor position directly to 0 - 9</li>
+  <li>0x0D: Set cursor position to 0</li>
+  <li>0x08: Decrement cursor position (backspace)</li>
+</ul>
+
+<p>The cursor position is 0 - 7 for the data digits, and 8 - 9 for the two
+address digits.</p>
+
+<p>The microcontroller only has 20 pins, so a <a href="http://www.nxp.com/documents/data_sheet/74HC_HCT4017.pdf">74HC4017</a> decade counter /
+decoder is used for scanning: it selects which digit to enable, and which
+keypad column to scan.  The microcontroller generates the clock and reset
+signals for the 74HC4017 and keeps track of which count it is currently at.</p>
+
+<p>Four of the microcontroller's pins are used to read the row lines from
+the keypad.  If a key is pressed, and its column is currently selected by
+the 74HC4017 then the corresponding row line will read high.  The
+microcontroller implements a de-bounce algorithm for the keys.  It records
+the state of each key for three periods (a period is defined as 4 scans of
+the LED display).  When the two most recent periods show that a key is
+pressed but the oldest period shows that it is not pressed, then a key press
+is considered to have occurred and the code for it is transmitted over the
+serial port.
+
+<p>The 74HC4017 drives ten 2N4401 NPN digit driver transistors.  These
+transistors can accomodate the peak digit current of 640 mA.</p>
+
+<p>The microcontroller drives 8 2N4403 PNP segment driver transistors. 
+These transistors can accomodate the average 80 mA segment current.  The
+collector of each segment driver is connected to the LED display through a
+22 ohm ballast resistor which sets the instantaneous segment current.</p>
+
+<p>The microcontroller has a font to convert the ASCII hexadecimal digits
+into 7-segment hexadecimal digits and maintains a 10 character video RAM. 
+When characters or control codes are received from the serial port, the
+video RAM is updated.  Recevied characters and control codes are processed
+by the UART RX interrupt handler.  Video memory and keypad scanning happens
+in the main loop outside of the interrupt handler.</p>
+
+<h3>Main Microcontroller</h3>
+
+<p>A Microchip <a href="http://www.microchip.com/wwwproducts/Devices.aspx?dDocName=en552770">PIC24FV32KA301-I/P</a> 16-bit microcontroller is used to simulate
+the RAM and generate the clock for the relay CPU.  This microcontroller was
+chosen because it is low cost, operates at 5V, is available in a DIP
+package, contains 2 KB of RAM, contains 512 bytes of EEPROM, contains two
+UARTS, can be programmed in-circuit, has analog inputs and an A/D converter,
+has a built-in calibrated oscillator and can easily be programmed in C.</p>
+
+<p>A 6-pin PIC <a href="http://en.wikipedia.org/wiki/In-circuit_serial_programming">ICSP</a> connector is provided to allow the 24FV32KA301 to be
+programmed in circuit with a <a href="http://www.microchip.com/stellent/idcplg?IdcService=SS_GET_PAGE&nodeId=1406&dDocName=en538340">PICkit 3</a>
+in-circuit debugger.</p>
+
+<p>Both of the 24FV32KA301 UARTs are used: one is used to comminicate with
+the PIC16F720.  The other is used for the serial console.  The schematic and
+PCB layout have pads for a DB-9 connector and a MAX232 TTL to RS-232 voltage
+level conversion chip for a conventional console serial port.  But these
+components are all left un-populated since they are nearly the same price as
+USB to TTL serial conversion cables.  Instead, a 6-pin header is provided
+for TTL serial with the defacto-standard Arduino pin-out.</p>
+
+<p>Data received from the serial console UART is processed by an interrupt
+handler.  There is an 80 character input FIFO implemented in software (this
+is in addition to the 4 byte FIFO provided by the UART).  When commands are
+processed, XOFF is sent to console to hold off more input.  When the command
+is complete, XON is sent.  I've found that the FTDI USB to serial converter
+sends many characters beyond the XOFF, so the input FIFO is needed.  The
+Prolific USB to serial converter seems to stop immediately.</p>
+
+<p>The A/D converter is used to read from the speed control POT.  A timer
+interrupt handler reads the A/D converter result and starts the next
+conversion.</p>
+
+<h3>Shift register chains</h3>
+
+<p>The 24FV32KA301 is only a 20-pin device, so a chain of <a href="http://www.nxp.com/documents/data_sheet/74HC_HCT595.pdf">74HC595</a> serial to
+parallel converters is used to increase the number of output signals to that
+needed to drive the relays.  Also a chain of <a href="http://www.nxp.com/documents/data_sheet/74HC_HCT597_CNV.pdf">74HC597</a> parallel to serial
+converters is used to increase the number of input signals to that needed to
+read back the PC and write data from the relays.</p>
+
+<p>The 12V level signals from relays are converted to 5V using a resistor
+dividers on the inputs of the 74HC597s.</p>
+
+<p>The 5V outputs from the 74HC595s are converted to 12V using <a href="http://www.ti.com/lit/ds/symlink/sn754410.pdf">SN754410NE</a>
+half h-bridge drivers (where bi-polar drivers are needed) and <a href="http://www.ti.com/lit/ds/symlink/uln2803a.pdf">ULN2803A</a>
+peripheral drivers (where we can get away with single-ended drivers).</p>
+
+<p>The relay clock line comes directly from a 24FV32KA301 output pin
+(buffered by a ULN2803A), and not from 74HC595 chain.</p>
+
+<p>A difficulty in using the 74HC597 and 74HC595 shift registers is that
+they are sensitive to noise from the relays on their clock (both load clock
+and shift clock) and reset lines.  The problem is exacerbated by the use of
+a low cost two-layer PCB with no shielding ground plane.</p>
+
+<p>The problem with noise on reset is solved by making do without reset.  No
+specific initial value is assumed.  Instead, each reset pin is tied to the
+5V pin.</p>
+
+<p>The problem with noise on the 74HC597 clock lines is solved by timing:
+the 74HC597s are clocked and read only when the relays are all idle, when
+there is no noise.  Unfortunately this trick does not work with the 74HC595s
+since their outputs need to be held unchanged while the relays are
+switching.  The solution to this problem was to add large 1000pF capacitors
+to the load clock pins of several of the 74HC595s.  This reduces the
+sensitivity to noise but makes the load clock slow- but this is OK, since
+it's still much faster than the relay switching time and has no impact on
+performance.</p>
+

@@ -1,0 +1,151 @@
+<p></p>
+
+<script language="JavaScript" src="cgi-bin/count.pl"></script>
+
+<h3>Relay computer "trainer"</h3>
+
+<center><a href="relaylarge.jpg" align=center><img src="relaysmall1.jpg"><p>Click for high resolution</p></a>
+</center>
+
+<p>The idea behind this project is to make a low relay count, single board
+computer similar to the single-board trainers of the early microcomputer era
+which can be mass produced for a reasonable price.</p>
+
+<p>Relays are expensive and large, so primary importance is given to
+keeping the relay count low.  The basic strategy is implement just the CPU
+and some basic I/O using relays, but implement the memory and front panel
+user interface with semiconductors.  The CPU is designed using low cost DPDT
+DIP relays. The front panel and memory are implemented using Microchip PIC
+microcontrollers.</p>
+
+<p>Architectural and circuit design tricks keep the relay count for the CPU
+low.  The Relay Trainer uses edge-triggered D flip-flops implemented with
+just 1.5 DPDT relays / bit.  Multi-port memory reduces the number of
+required register bits.  Self-modified code (borrowed from very early
+computers) keep the number of registers and logic gates needed to an
+absolute minimum while still maintaining an interesting instruction set.</p>
+
+<p>Here are some of the basic characteristics of the Relay Trainer:</p>
+
+<ul>
+<li>Relay count: 83</li>
+<li>Datapath width: 8 bits</li>
+<li>Instruction width: 32 bits</li>
+<li>Instruction type: two-address (each instruction specifies two memory locations and the result is written back to one of them)</li>
+<li>Memory size: 256 32-bit words (1 KB)</li>
+<li>Registers: 13 bits total including 8-bit Program Counter, 1-bit carry flag, 4-bit output register</li>
+<li>Performance: one cycle per instruction, up to ~12 Hz for ~12 instructions per second</li>
+<li>I/O: 4 switch closure inputs and 4 relay contact outputs brought to
+screw terminals.  Programs can also read from keypad and serial console and
+write to serial console.</li>
+<li>Supported concepts:</li>
+  <ul>
+  <li>Subroutines (supported with self-modified code: the return address is inserted into a jump instruction)</li>
+  <li>Indexing (supported with self-modified code: the index is inserted into a memory reference instruction)</li>
+  <li>Multi-precision arithmetic</li>
+  <li>Multiply and Divide implemented as subroutines</li>
+  <li>Complete set of conditional jumps (altough there are no Zero or Negative flags, a memory word can be tested for zero and negative)</li>
+  <li>Single-instruction loops with "incjne" (increment and jump if not equal to zero) instruction</li>
+  </ul>
+</ul>
+
+<p>Other basic features:</p>
+
+<ul>
+<li>Keypad and LED display allows you to:</li>
+  <ul>
+    <li>Display and modify memory</li>
+    <li>Halt / run and single step</li>
+    <li>Vary clock speed (15 pre-programmed speeds or use knob)</li>
+  </ul>
+<li>Discrete LEDs</li>
+  <ul>
+    <li>Show current 32-bit instruction given to CPU</li>
+    <li>Show two 8-bit operands fetched from memory</li>
+    <li>Show current program counter value</li>
+    <li>Show 8-bit data being written back to memory</li>
+    <li>Show carry flag and condition logic result</li>
+    <li>Show input and output port bits</li>
+    <li>Show the clock</li>
+  </ul>
+<li>Uses hard drive molex connector for 12V and 5V power.  Small switching power supplies
+  for hard drives for IDE/SATA to USB converter kits are widely available at
+  low cost.</li>
+<li>512 bytes of Non-volatile memory is provided to save and restore the RAM</li>
+<li>Serial port provided for 9600 serial console</li>
+  <ul>
+    <li>Built-in assembler, disassembler and instruction trace display</li>
+    <li>Load or save programs by cutting and pasting into terminal emulator window</li>
+    <li>Provides 6-pin Arduino logic-level RS-232 header for use of widely
+    available USB to TTL RS-232 converter cables</li>
+  </ul>
+<li>The relay clock is stopped when the CPU halts: this saves the life of
+  the relays.  The clock resumes if you press the step or run buttons.</li>
+</ul>
+
+<p>Yes, there are videos!  Check out the <a href="example-code.html">example programs
+page</a>.</p>
+
+<p>I'm selling some of my prototypes on eBay: search for "Relay Computer
+Trainer"</p>
+
+<br>
+<br>
+<hr size="1">
+
+<center>
+<div style="background-color:#dddddd; border: 1px solid #808080;
+width:800px; font-size:10px; padding:10px;" align="left">
+<!-- ========================================== -->
+<!-- Include this code in each page on the Ring -->
+<p/>
+<center><h2>Homebuilt CPUs WebRing</h2>
+<p/>
+<script src="http://members.iinet.net.au/~daveb/simplex/webring.js"
+        language="JavaScript" type="text/javascript" ></script>
+<form action="http://members.iinet.net.au/~daveb/simplex/webring.js"
+name="ring" id="ring">
+<input type="button" value="Ring-Home" onclick="ringhome()" />
+<input type="button" value="Previous"  onclick="previous()" />
+<input type="button" value="Next"      onclick="next()" />
+<input type="button" value="Random"    onclick="random()" />
+</form>
+</center>
+<p/>
+<center>JavaScript by <a href="mailto:qirien@earthling.net">Qirien
+Dhaela</a></center>
+<p/>
+<h3>Join the ring?</h3>
+To join the Homebuilt CPUs ring, drop me <a
+href="mailto:daveb@iinet.net.au">a line</a>,
+mentioning your page's URL. I'll then add it to the list.
+<br/>
+You will need to copy this code fragment into your page. <br/>
+<i>Note</i>: The ring is chartered for projects that include a home-built
+CPU. It can emulate a commercial part, that&prime;s OK. But actually using
+that
+commercial CPU doesn&prime;t rate. Likewise, the project must have been
+at least partially built: pure paper designs don&prime;t rate either. It can
+be built using any technology
+you like, from relays to FPGAs.
+<!-- End of code fragment, in all ring pages.   -->
+<!-- ========================================== -->
+</div>
+</center>
+
+
+<script type="text/javascript">
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-22609740-1']);
+  _gaq.push(['_trackPageview']);
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript';
+ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' :
+'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0];
+s.parentNode.insertBefore(ga, s);
+  })();
+</script>
+
+   </div> </body>

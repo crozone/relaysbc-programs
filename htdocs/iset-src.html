@@ -1,0 +1,356 @@
+<h3>Instruction set design puzzle</h3>
+
+<p>There were a number of design choices made to maximize versatility of the
+two-address instruction set while keeping the relay count as low as
+possible.  The starting arbitrary decision is that the B field is the one
+which can be modified by self modified code.  This implies:</p>
+
+<ul>
+
+  <li>The B field needs to hold the destination address for jump
+  instructions, otherwise we can't implement subroutine linkage.</li>
+
+    <ul>
+
+      <li>But this means that the A field needs to be the one with the
+      complementer (controlled by the "com" bit), so we can test the A
+      argument for zero (by setting up the ALU to negate the A operand) and
+      conditionally jump all in one instruction.</li>
+
+      <li>This also implies that the B operand of the ALU needs the zero-MUX
+      (controlled by the "ben" bit), so that it can be masked off for this
+      comparison.</li>
+
+    </ul>
+</ul>
+
+<p>But which field is the result address?  It turns out that we need
+both.</p>
+
+<ul>
+
+  <li>We need to be able to write to the B address in order to implement a
+  data move instruction (the "st"ore instruction), since we need to be able
+  to mask off the operand we are storing to (to pass the other argument
+  unchanged), and the B side has the zero-MUX.</li>
+
+  <li>But we need to be able to write to the A address in order to implement
+  the single-cycle loop instructions (since the B address has the jump
+  target): incjne and incjeq.</li>
+
+  <li>More subtly, in order to support indirection (for support of pointers)
+  with self-modified code, we need to be able to write both to the field
+  with the modifying address for write indirection, and to the other field
+  for read indirection.  We can modify the B field of the store instruction
+  for write indirection, and ideally we should have a complementary load
+  instruction (which moves data from B to A) for read indirection.  We don't
+  have it, but we can make do with an add instruction which writes to A by
+  requiring that the target address be pre-cleared.</li>
+
+  <ul>
+
+    <li>Note that we don't ever have to write to both the A and B fields at
+    the same time, so the memory system does not require multiple write
+    ports- just a single port fed by a MUX.</li>
+
+    <li>Four more relays and an added control bit would be needed to provide
+    a zero-MUX for the A operand to implement a load instruction for read
+    indirection.</li>
+
+  </ul>
+
+</ul>
+
+<p>Other concerns:</p>
+<ul>
+
+  <li>Shift and rotate left can be implemented by adding an operand to
+  itself.</li>
+
+  <li>Shift and rotate right require another 9-bit 2:1 MUX at the expense
+  of 5 relays (we could have left these instructions out, but didn't).</li>
+
+</ul>
+
+<h3>Instruction Set</h3>
+
+<p>Here is a printable <a href="http://sourceforge.net/projects/relaysbc/files/refcard.pdf/download">Reference card.pdf</a></p>
+
+<p>The B field is always given on the right with these assembly mnemonics. 
+This is the field which is subject to change by self-modifying code and is
+usually the result address.</p>
+
+<p>If a two-operand instruction has a suffix of "to", as in "addto", it
+means the result is placed in the right-side operand (in the B field).  If
+the "to" is missing, it means the result is stored in the left side (in the
+A field).  There is one exception to this rule: "st" (store) saves its result
+in the right side even though it does not have the "to" suffix.</p>
+
+<p>A hash (or pound sign) in front of the left operand signifies an
+immediate value.  The A field is treated as containing the data itself
+instead of containing an address and the 'imm' bit of the instruction will
+be set.</p>
+
+<p>There are a few instructions which store their result on the left (which
+means they have the "wra" bit set).  These include add, rsb, incjne and
+incjeq.  Add and rsb seem redundant since the addto and rsbto instructions
+exist, but they are needed to implement read indirection from pointers.  A
+real "ld" (load) instruction which saves on the left would be better for
+this, but would require more relays and more control bits to implement.</p>
+
+<p>Here are some of the possible instructions:</p>
+
+<p><b>4010FF00&nbsp;&nbsp;&nbsp;&nbsp;nop</b></p>
+<p>	No operation.  Carry flag is preserved (ALU is set up to add 0xFF +
+0x00 + carry flag: so if carry was set, it will be set again when this
+instruction completes).
+</p>
+<p><b>C810FF00&nbsp;&nbsp;&nbsp;&nbsp;halt</b></p>
+<p>	The clock is stopped until user presses step or run.  Carry flag is
+preserved.
+</p>
+<p><b>00000000&nbsp;&nbsp;&nbsp;&nbsp;clc</b></p>
+<p>	Clear the carry flag.
+</p>
+<p><b>4020FF00&nbsp;&nbsp;&nbsp;&nbsp;stc</b></p>
+<p>	Set the carry flag.
+</p>
+<p><b>4018FFbb&nbsp;&nbsp;&nbsp;&nbsp;jmp&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Unconditional jump to bb.  Carry flag is preserved.  PC = bb.
+</p>
+<p><b>8408aabb&nbsp;&nbsp;&nbsp;&nbsp;jsr&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Jump to subroutine located at bb.  The return address is placed in
+memory location aa (which could be a jmp instruction located at the end of
+the subroutine).  Carry is cleared.
+</p>
+<p><b>0061aabb&nbsp;&nbsp;&nbsp;&nbsp;jmi&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p><b>0061aabb&nbsp;&nbsp;&nbsp;&nbsp;jlt&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Jump to bb if signed contents of memory location aa is negative
+(minus, or less than zero).  If [aa].7 == 1 then PC = bb else PC = PC + 1. 
+Carry flag is set if [aa] is zero.
+</p>
+<p><b>0069aabb&nbsp;&nbsp;&nbsp;&nbsp;jpl&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p><b>0069aabb&nbsp;&nbsp;&nbsp;&nbsp;jge&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Jump to bb if signed contents of memory location aa is positive or
+zero (plus, or greater than or equal to zero).  If [aa].7 == 0 then PC = bb
+else PC = PC + 1.  Carry flag is set if [aa] is zero.
+</p>
+<p><b>0062aabb&nbsp;&nbsp;&nbsp;&nbsp;jeq&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Jump to bb if contents of memory location aa is equal to zero.  If
+[aa] == 0 then PC = bb else PC = PC + 1.  Carry flag is set if [aa] is zero.
+</p>
+<p><b>006Aaabb&nbsp;&nbsp;&nbsp;&nbsp;jne&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Jump to bb if contents of memory location aa is not equal to zero. 
+If [aa] != 0 then PC = bb else PC = PC + 1.  Carry flag is set if [aa] is
+zero.
+</p>
+<p><b>0063aabb&nbsp;&nbsp;&nbsp;&nbsp;jle&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Jump to bb if signed contents of memory location aa is less than or
+equal to zero.  If [aa] &lt;= 0 then PC = bb else PC = PC + 1.  Carry flag is
+set if [aa] is zero.
+</p>
+<p><b>006Baabb&nbsp;&nbsp;&nbsp;&nbsp;jgt&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Jump to bb if signed contents of memory location aa is greater than
+zero.  If [aa] > 0 then PC = bb else PC = PC + 1.  Carry flag is set if [aa]
+is zero.
+</p>
+<p><b>006400bb&nbsp;&nbsp;&nbsp;&nbsp;jcc&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p><b>006400bb&nbsp;&nbsp;&nbsp;&nbsp;jlo&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Jump to bb if carry flag is clear (or if unsigned left argument is
+lower than unsigned right argument of previous subtraction instruction).  If
+C == 0 then PC = bb else PC = PC + 1.
+</p>
+<p><b>006C00bb&nbsp;&nbsp;&nbsp;&nbsp;jcs&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p><b>006C00bb&nbsp;&nbsp;&nbsp;&nbsp;jhs&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Jump to aa if carry flag is set (or if unsigned left argument is
+higher or same as unsigned right argument of previous subtraction
+instruction).  If C == 1 then PC = aa else PC = PC + 1.
+</p>
+<p><b>0066aabb&nbsp;&nbsp;&nbsp;&nbsp;jls&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Jump to bb if unsigned left argument is lower or same as unsigned
+right argument of previous subtraction instruction.  The result of the
+subtraction instruction must be available in memory location aa.  If C ==0
+or [aa] == 0 then PC = bb else PC = PC + 1.
+</p>
+<p><b>006Eaabb&nbsp;&nbsp;&nbsp;&nbsp;jhi&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Jump to bb if unsigned left argument is higher than unsigned right
+argument of previous subtraction instruction.  The result of the subtraction
+instruction must be available in memory location aa.  If C == 1 and [aa] !=
+0 then PC = bb else PC = PC + 1.
+</p>
+<p><b>020Aaabb&nbsp;&nbsp;&nbsp;&nbsp;je&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Jump to bb if left argument is even.  If [aa].0 == 0 then PC = bb
+else PC = PC + 1.
+</p>
+<p><b>0202aabb&nbsp;&nbsp;&nbsp;&nbsp;jo&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Jump to bb if unsigned left argument is odd.  If [aa].0 == 1 then
+PC = bb else PC = PC + 1.
+</p>
+<p><b>802Aaabb&nbsp;&nbsp;&nbsp;&nbsp;incjne&nbsp;&nbsp;&nbsp;&nbsp;aa, bb</b></p>
+<p>	Increment [aa] and jump if there is no carry from this.  If [aa] ==
+255 then PC = PC + 1 else PC = bb.  [aa] = [aa] + 1.
+</p>
+<p><b>8022aabb&nbsp;&nbsp;&nbsp;&nbsp;incjeq&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Increment [aa] and jump if there is a carry.  If [aa] == 255 then PC
+= bb else PC = PC + 1.  [aa] = [aa] + 1.
+</p>
+<p><b>0800aabb&nbsp;&nbsp;&nbsp;&nbsp;st&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Store contents of memory location aa into memory location bb.  Carry
+is cleared.
+</p>
+<p><b>4800aabb&nbsp;&nbsp;&nbsp;&nbsp;st&nbsp;&nbsp;&nbsp;&nbsp;	#aa, bb</b></p>
+<p>	Store constant from instruction field aa into memory location bb. 
+Carry is cleared.
+</p>
+<p><b>1000aa00&nbsp;&nbsp;&nbsp;&nbsp;out&nbsp;&nbsp;&nbsp;&nbsp;	aa</b></p>
+<p>	Store contents of memory location into output register.
+</p>
+<p><b>5000aa00&nbsp;&nbsp;&nbsp;&nbsp;out&nbsp;&nbsp;&nbsp;&nbsp;	#aa</b></p>
+<p>	Store immediate data into output register.
+</p>
+<p><b>9800aa00&nbsp;&nbsp;&nbsp;&nbsp;outc&nbsp;&nbsp;&nbsp;&nbsp;	aa</b></p>
+<p>	Write contents of memory location aa to serial port.
+</p>
+<p><b>B800aa00&nbsp;&nbsp;&nbsp;&nbsp;outc&nbsp;&nbsp;&nbsp;&nbsp;	#aa</b></p>
+<p>	Write immediate data aa to serial port.
+</p>
+<p><b>680000bb&nbsp;&nbsp;&nbsp;&nbsp;in&nbsp;&nbsp;&nbsp;&nbsp;bb</b></p>
+<p>	Read input port and save value in memory location bb.
+</p>
+<p><b>E80000bb&nbsp;&nbsp;&nbsp;&nbsp;inwait&nbsp;&nbsp;&nbsp;&nbsp;bb</b></p>
+<p>	Pause CPU.  When inputs change, resume CPU, read new input and save
+value in memory location bb.  If instead one of the keypad keys is pressed,
+resume CPU and place the keypad hex code into bb (the hex keys give codes
+0x00 - 0x0F and the others give codes in the range 0x10 - 0x17).  Also, if
+there is a key-press on the console-serial the CPU is resumed and the
+character is placed into bb.
+</p>
+<p><b>480000bb&nbsp;&nbsp;&nbsp;&nbsp;clr&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Clear memory location bb.  [bb] = 0.
+</p>
+<p><b>8080aabb&nbsp;&nbsp;&nbsp;&nbsp;add&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Add [bb] to [aa]: [aa] = [aa] + [bb]
+</p>
+<p><b>0880aabb&nbsp;&nbsp;&nbsp;&nbsp;addto&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Add contents of memory location aa to memory location bb.  [bb] =
+[aa] + [bb]. Carry is modified.
+</p>
+<p><b>4880aabb&nbsp;&nbsp;&nbsp;&nbsp;addto&nbsp;&nbsp;&nbsp;&nbsp;	#aa, bb</b></p>
+<p>	Add constant located in aa field of instruction to memory location
+bb.  Carry is modified.  [bb] = aa + [bb].
+</p>
+<p><b>488001bb&nbsp;&nbsp;&nbsp;&nbsp;inc&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Increment memory location bb.  [bb] = [bb] + 1.
+</p>
+<p><b>48E001bb&nbsp;&nbsp;&nbsp;&nbsp;dec&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Decrement memory location bb.  [bb] = [bb] - 1.
+</p>
+<p><b>0890aabb&nbsp;&nbsp;&nbsp;&nbsp;adcto&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Add memory location aa and carry flag to memory location bb.  Carry
+is modified.  [bb] = [aa] + [bb] + c.
+</p>
+<p><b>4890aabb&nbsp;&nbsp;&nbsp;&nbsp;adcto&nbsp;&nbsp;&nbsp;&nbsp;	#aa, bb</b></p>
+<p>	Add constant located in aa field of instruction and carry flag to
+memory location bb.  Carry is modified.
+</p>
+<p><b>0880bbbb&nbsp;&nbsp;&nbsp;&nbsp;lsl&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Logical shift left memory location bb.  Zero is shifted into bit 0. 
+Bit 7 is saved in the carry flag.
+</p>
+<p><b>08A0bbbb&nbsp;&nbsp;&nbsp;&nbsp;lslo&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Shift memory location bb left.  One is shifted into bit 0.  Bit 7 is
+saved in the carry flag.
+</p>
+<p><b>0A00bbbb&nbsp;&nbsp;&nbsp;&nbsp;lsr&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Logical shift rights memory location bb.  Zero is shifted into bit 7. 
+Bit 0 is saved in the carry flag.
+</p>
+<p><b>0A20bbbb&nbsp;&nbsp;&nbsp;&nbsp;lsro&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Shift memory location bb right.  One is shifted into bit 7.  Bit 0 is
+saved in the carry flag.
+</p>
+<p><b>0A00bbbb&nbsp;&nbsp;&nbsp;&nbsp;lsrto&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Logical shift rights memory location aa and save the result in
+memory location bb.  Zero is shifted into bit 7.   Bit 0 is saved in the carry flag.
+</p>
+<p><b>0A20bbbb&nbsp;&nbsp;&nbsp;&nbsp;lsroto&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Shift memory location aa right and save the result in memory
+location bb.  One is shifted into bit 7.  Bit 0 is saved in the carry flag.
+</p>
+<p><b>0080bbbb&nbsp;&nbsp;&nbsp;&nbsp;ntoc&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Move sign bit of memory location bb into carry.  This is useful to
+construct arithmetic (sign-preserving) shift right with this two instruction
+sequence:
+</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;ntoc&nbsp;&nbsp;&nbsp;&nbsp;bb</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;ror&nbsp;&nbsp;&nbsp;&nbsp;bb</p>
+
+<p><b>0890bbbb&nbsp;&nbsp;&nbsp;&nbsp;rol&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Rotate left memory location bb.  Carry flag is shifted into bit 0. 
+Bit 7 is saved in the carry flag.
+</p>
+<p><b>0A10aabb&nbsp;&nbsp;&nbsp;&nbsp;rorto&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Rotate right memory location aa and save the result in memory
+location bb.
+</p>
+<p><b>0A10bbbb&nbsp;&nbsp;&nbsp;&nbsp;ror&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Rotate right memory location bb.
+</p>
+<p><b>80E0aabb&nbsp;&nbsp;&nbsp;&nbsp;rsb&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Reverse subtract: [aa] = [bb] - [aa].
+</p>
+<p><b>08E0aabb&nbsp;&nbsp;&nbsp;&nbsp;rsbto&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Subtract memory location aa from memory location bb.  Carry is
+modified.  [bb] = [bb] - [aa].
+</p>
+<p><b>48E0aabb&nbsp;&nbsp;&nbsp;&nbsp;rsbto&nbsp;&nbsp;&nbsp;&nbsp;	#aa, bb</b></p>
+<p>	Subtract constant located in aa field from memory location bb.  [bb]
+= [bb] - aa.
+</p>
+<p><b>08D0aabb&nbsp;&nbsp;&nbsp;&nbsp;rsbcto&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Subtract memory location aa and inverse of carry flag from memory location bb.  Carry is
+modified.  [bb] = [bb] - [aa] - ~c.
+</p>
+<p><b>48D0aabb&nbsp;&nbsp;&nbsp;&nbsp;rsbcto&nbsp;&nbsp;&nbsp;&nbsp;	#aa, bb</b></p>
+<p>	Subtract constant located in aa field and inverse of carry flag from memory location bb.  [bb]
+= [bb] - aa - ~c.
+</p>
+<p><b>0980aabb&nbsp;&nbsp;&nbsp;&nbsp;andto&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+
+<p>	Bitwise AND contents of memory location aa into memory location bb. 
+[bb] = [bb] &amp; [aa].
+</p>
+<p><b>4980aabb&nbsp;&nbsp;&nbsp;&nbsp;andto&nbsp;&nbsp;&nbsp;&nbsp;	#aa, bb</b></p>
+<p>	Bitwise AND constant in aa field into memory location bb.  [bb] =
+[bb] &amp; aa.
+</p>
+<p><b>09C0aabb&nbsp;&nbsp;&nbsp;&nbsp;bicto&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+
+<p>	Clear each bit in memory location bb with a corresponding bit which
+is set in memory location aa: [bb] = [bb] &amp; ~[aa].
+</p>
+<p><b>49C0aabb&nbsp;&nbsp;&nbsp;&nbsp;bicto&nbsp;&nbsp;&nbsp;&nbsp;	#aa, bb</b></p>
+<p>	[bb] = [bb] &amp; ~aa.
+</p>
+<p><b>0860aabb&nbsp;&nbsp;&nbsp;&nbsp;negto&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Load 2's complement inverse of memory location aa into memory
+location bb.  [bb] = -[aa].
+</p>
+<p><b>0850aabb&nbsp;&nbsp;&nbsp;&nbsp;ngcto&nbsp;&nbsp;&nbsp;&nbsp;	aa, bb</b></p>
+<p>	Load 1's complement of memory location aa plus carry into memory
+location bb. [bb] = ~[aa] + c.
+</p>
+<p><b>0860bbbb&nbsp;&nbsp;&nbsp;&nbsp;neg&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	2's complement memory location bb.  [bb] = -[bb].
+</p>
+<p><b>0850bbbb&nbsp;&nbsp;&nbsp;&nbsp;ngc&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	Complement and then add carry to location bb.  [bb] = ~[bb] + c. 
+Use for multi-precision negate.
+</p>
+<p><b>0840aabb&nbsp;&nbsp;&nbsp;&nbsp;comto&nbsp;&nbsp;&nbsp;&nbsp;aa, bb</b></p>
+<p>	Load 1's complement of memory location aa into memory location bb:
+[bb] = ~[aa].
+</p>
+<p><b>0840bbbb&nbsp;&nbsp;&nbsp;&nbsp;com&nbsp;&nbsp;&nbsp;&nbsp;	bb</b></p>
+<p>	1's complement of memory location aa: [bb] = ~[bb].
+</p>

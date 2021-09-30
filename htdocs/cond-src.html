@@ -1,0 +1,84 @@
+
+<h3>Condition Logic</h3>
+
+<p>The condition logic supports two types of tests: comparisons with zero and
+comparisons between two unsigned numbers.</p>
+
+<p>A trick is used to detect if a value is equal to zero.  Instead of having
+dedicated zero-detect logic (which would normally be implemented as a
+wide-input NOR gate), the carry chain of the ALU is used.  If the value
+under test is negated, then the carry output from the ALU will be high if
+and only if the input value is exactly zero.</p>
+
+<h3>Comparisons with zero</h3>
+
+<p>In this mode, the A field will indicate a memory location to test and the B
+field will specify a jump address to take if the condition is true.  The ALU
+should be set up to negate the A operand in order to test for zero.  If the
+A operand is zero, the carry out from the ALU will be 1.</p>
+
+<p>Instruction set up for comparison with zero:</p>
+<ul>
+<li>CEN = 0</li>
+<li>CINV = 1</li>
+<li>COM = 1</li>
+<li>BEN = 0</li>
+<li>A has address of data to test</li>
+<li>B has jump address</li>
+</ul>
+
+<h3>Comparison between two unsigned arguments</h3>
+
+<p>First, a subtraction instruction is issued with the two arguments to
+compare.  In other words, compute X - Y.  The result should be saved back to
+X in order for the second instruction to test it for zero.</p>
+
+<p>Instruction set up for subtraction part:</p>
+<ul>
+<li>B points to the left side argument X</li>
+<li>A points to the right side argument Y</li>
+<li>CEN = 0</li>
+<li>CINV = 1</li>
+<li>COM = 1</li>
+<li>BEN = 1</li>
+<li>WRB = 1</li>
+</ul>
+
+<p>Second, issue the conditional instruction with the subtraction result as the
+A operand to the ALU.</p>
+
+<p>Instruction setup for conditional jump part:</p>
+<ul>
+<li>A points to X (which was written to by the previous instruction).</li>
+<li>B has the jump address.</li>
+<li>CEN = 0</li>
+<li>CINV = 1</li>
+<li>COM = 1</li>
+<li>BEN = 0</li>
+</ul>
+<h3>Condition Codes</h3>
+
+<p>Here is a summary of the condition codes.  Key:</p>
+<ul>
+<li>N is bit 7 of the A argument of the ALU.</li>
+<li>Z is the carry-out value of the ALU (which is the input to the carry
+flag).</li>
+<li>C is the carry flag (the carry-out of the ALU from the previous
+instruction).</li>
+<li>A is A operand to the ALU</li>
+<li>X and Y are arguments to an immediately preceding subtraction
+instruction (performing X - Y).  The result of this instruction should be
+presented to the A argument of the ALU for the zero test.</li>
+</ul>
+
+<img src="condtable.gif"/>
+
+<p>The logical design of the condition decoder is as follows.  cc0 - cc3 are
+the 4 bits from the cc field of the instruction.</p>
+
+<img src="condlogic.gif"/>
+ 
+<p>It is implemented with 5 relays as follows.  The carry flag provides
+both inverting and non-inverting outputs, so c_l comes directly from it.</p>
+
+<img src="condcircuit.gif"/>

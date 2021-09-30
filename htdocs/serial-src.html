@@ -1,0 +1,359 @@
+<h3>Serial Console</h3>
+
+<p>The Relay Trainer has a serial console port.  A USB to TTL serial cable
+using either the Prolific or FTDI conversion chips may be used.</p>
+
+<p>The Windows driver for Prolific PL2303-based cables can be found <a
+href="http://www.prolific.com.tw/US/ShowProduct.aspx?p_id=225&pcid=41">here</a>.</p>
+
+<p>The Windows driver for FTDI-based cables can be found <a
+href="http://www.ftdichip.com/Drivers/VCP.htm">here</a>.</p>
+
+<p>I've found that the combination of these drivers and Windows
+(particularly 64-bit Windows-7) is somewhat buggy.  If the you find that
+your system hangs or that you get BSOD, try plugging the cable into a
+different USB slot, or through a USB hub.  I've generally not had problems
+with the open-source drivers provided with Linux.</p>
+
+<p>There are several styles of connectors available on these cables.  This
+is how to connect them to the relay computer:</p>
+
+<center><img src="prolific.gif"></center>
+
+<br>
+
+<center><img src="ftdi.gif"></center>
+
+<p>I recommend that you use <a href="http://www.chiark.greenend.org.uk/~sgtatham/putty/download.html">PuTTY</a>
+as the terminal emulator for Windows, or Minicom for Linux.</p>
+
+<p>Unfortunately, PuTTY does not provide a drop-down list of available COM
+ports, so you have to find the COM port for the USB to TTL serial conversion
+cable by looking at Control Panel => Device Manager</p>
+
+<center><img src="devicemanager.gif"></center>
+
+<p>Although the very first time you plug the USB to serial cable
+into the machine you'll see a balloon tip with the COM port:</p>
+
+<center><img src="tip.gif"></center>
+
+<p>When you start PuTTY, its configuration screen is shown.  Make sure
+"Session" is selected on the left side, if you don't see this screen.  It
+should be configured as follows.  Select "Serial" for connection type, then
+type in the COM port of the USB to TTL serial cable and leave the BAUD rate
+set at 9600.</p>
+
+<center><img src="putty-setup.gif"></center>
+
+<p>Under serial settings (select on the left), select XON/XOFF flow control. 
+Finally click Open to start the terminal emulator.</p>
+
+<center><img src="putty-setup1.gif"></center>
+
+<p>Once the cable is connected and the Relay Trainer is powered on, you
+should see the following on the terminal emulator.  Type 'h' to get a list
+of commands:</p>
+
+<pre style="font-family: Andale Mono, Lucida Console, Monaco, fixed,
+monospace; color: #000000; background-color: #eee;font-size: 12px;border:
+1px dashed #999999;line-height: 14px;padding: 5px; overflow: auto; width:
+100%"><code>
+
+Relay Computer READY
+
+>
+
+><b>h</b>
+help            Show this help text
+h               Show this help text
+s               Step one instruction
+g [hh]          Go (at current or address hh)
+j hh            Jump to address hh
+d               Hex dump
+r               Show registers
+speed h         Set speed 0 - F
+clear           Clear memory
+save            Save memory to EEPROM
+load            Load memory from EEPROM
+t [on|off]      Turn tracing on / off
+b [hhhh]        Set/Clear breakpoint
+a hhhh          Assemble
+clr             Clear symbol table
+sy              Show symbol table
+u hhhh          Unassemble
+v expr          Evaluate expression
+aa: hh hh ...   Load memory with hex data
+
+>
+</code></pre>
+
+<p>Here are some of the things which can be done through the serial
+port:</p>
+
+<p>Show hexadecimal dump of the memory:</p>
+
+<pre style="font-family: Andale Mono, Lucida Console, Monaco, fixed,
+monospace; color: #000000; background-color: #eee;font-size: 12px;border:
+1px dashed #999999;line-height: 14px;padding: 5px; overflow: auto; width:
+100%"><code>
+
+><b>d</b>
+00: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+08: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+10: 48009000 4800e901 0062011a 08000002 08e00102 00660218 08e00100 4018ff12
+18: 08e00001 4018ff12 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+20: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+28: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+30: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+38: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+40: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+48: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+50: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+58: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+60: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+68: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+70: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+78: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+80: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+88: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+90: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+98: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+a0: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+a8: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+b0: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+b8: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+c0: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+c8: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+d0: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+d8: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+e0: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+e8: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+f0: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+f8: c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00 c810ff00
+
+>
+
+</code></pre>
+
+<p>Show the registers:</p>
+
+<pre style="font-family: Andale Mono, Lucida Console, Monaco, fixed,
+monospace; color: #000000; background-color: #eee;font-size: 12px;border:
+1px dashed #999999;line-height: 14px;padding: 5px; overflow: auto; width:
+100%"><code>
+
+><b>r</b>
+From relays:
+  PC = 00
+  Write data = ff
+To relays:
+  Current insn = c810ff00
+  A data = ff
+  B data = 00
+Current speed = 5
+
+>
+
+</code></pre>
+
+<p>Use the built-in assembler to enter an a program from assembly language
+source code:</p>
+
+<pre style="font-family: Andale Mono, Lucida Console, Monaco, fixed,
+monospace; color: #000000; background-color: #eee;font-size: 12px;border:
+1px dashed #999999;line-height: 14px;padding: 5px; overflow: auto; width:
+100%"><code>
+
+><b>a 40</b>
+40:  <b>st #-8, 0</b>
+41: <b>loop incjne 0, loop</b>
+
+Adding fixup
+Undefined symbol
+Fixup at 41
+42:  <b>halt</b>
+43:
+</code></pre>
+
+<p>Note: hit Ctrl-C to exit the assembler.  You should type <b>sy</b> to verify
+that there are no remaining undefined symbols after assembly is complete. 
+Use the <b>clr</b> command to clear the symbol table in preparation for
+assembling a new program.</p>
+
+<p>Use the built-in dis-assembler to check the program just entered:</p>
+
+<pre style="font-family: Andale Mono, Lucida Console, Monaco, fixed,
+monospace; color: #000000; background-color: #eee;font-size: 12px;border:
+1px dashed #999999;line-height: 14px;padding: 5px; overflow: auto; width:
+100%"><code>
+
+><b>u 40</b>
+40  4800_f800         st      #0xf8, 0x00
+41  802a_0041         incjne  0x00, 0x41
+42  c810_ff00         halt
+43  c810_ff00         halt
+44  c810_ff00         halt
+45  c810_ff00         halt
+46  c810_ff00         halt
+47  c810_ff00         halt
+48  c810_ff00         halt
+49  c810_ff00         halt
+4a  c810_ff00         halt
+4b  c810_ff00         halt
+4c  c810_ff00         halt
+4d  c810_ff00         halt
+4e  c810_ff00         halt
+4f  c810_ff00         halt
+50  c810_ff00         halt
+51  c810_ff00         halt
+52  c810_ff00         halt
+53  c810_ff00         halt
+54  c810_ff00         halt
+55  c810_ff00         halt
+
+>
+</code></pre>
+
+<p>The <b>sy</b> command can be used to show the symbol table used by the
+assembler:</p>
+
+<pre style="font-family: Andale Mono, Lucida Console, Monaco, fixed,
+monospace; color: #000000; background-color: #eee;font-size: 12px;border:
+1px dashed #999999;line-height: 14px;padding: 5px; overflow: auto; width:
+100%"><code>
+
+><b>sy</b>
+loop = 41
+Symbol table size b
+</code></pre>
+
+<p>There are only 256 bytes available for the symbol table.  The built-in
+assembler is a one-pass assembler, which means forward references also take
+up space in the symbol table.</p>
+
+<p>Instruction tracing can be enabled, so that you can watch what the relay
+computer is doing while a program is running:</p>
+
+<pre style="font-family: Andale Mono, Lucida Console, Monaco, fixed,
+monospace; color: #000000; background-color: #eee;font-size: 12px;border:
+1px dashed #999999;line-height: 14px;padding: 5px; overflow: auto; width:
+100%"><code>
+
+><b>t on</b>
+
+><b>g 40</b>
+40  4800_f800         st      #0xf8, 0x00  B[00] &lt;- f8
+41  802a_0041         incjne  0x00, 0x41   A[00] &lt;- f9  PC &lt;- 41
+41  802a_0041         incjne  0x00, 0x41   A[00] &lt;- fa  PC &lt;- 41
+41  802a_0041         incjne  0x00, 0x41   A[00] &lt;- fb  PC &lt;- 41
+41  802a_0041         incjne  0x00, 0x41   A[00] &lt;- fc  PC &lt;- 41
+41  802a_0041         incjne  0x00, 0x41   A[00] &lt;- fd  PC &lt;- 41
+41  802a_0041         incjne  0x00, 0x41   A[00] &lt;- fe  PC &lt;- 41
+41  802a_0041         incjne  0x00, 0x41   A[00] &lt;- ff  PC &lt;- 41
+41  802a_0041         incjne  0x00, 0x41   A[00] &lt;- 00
+
+>
+</code></pre>
+
+<p>You can select a hex-dump from a program listing and paste it into the
+terminal emulator to load an assembled program into the memory- in this case
+the LFSR example program:</p>
+
+<pre style="font-family: Andale Mono, Lucida Console, Monaco, fixed,
+monospace; color: #000000; background-color: #eee;font-size: 12px;border:
+1px dashed #999999;line-height: 14px;padding: 5px; overflow: auto; width:
+100%"><code>
+
+>00: 00000001
+
+>02: 00000009
+
+>03: 00000080
+
+>05: 84081d10
+
+>06: 802a0305
+
+>07: c810ff00
+
+>10: 08000001
+
+>11: 08900101
+
+>12: 08900101
+
+>13: 08900101
+
+>14: 49800301
+
+>15: 0062011a
+
+>16: 48e00101
+
+>17: 0062011c
+
+>18: 48e00101
+
+>19: 0062011c
+
+>1a: 08a00000
+
+>1b: 4018ff1d
+
+>1c: 08800000
+
+>1d: 4018ff00
+
+>
+</code></pre>
+
+<p>Then execute it:</p>
+
+<pre style="font-family: Andale Mono, Lucida Console, Monaco, fixed,
+monospace; color: #000000; background-color: #eee;font-size: 12px;border:
+1px dashed #999999;line-height: 14px;padding: 5px; overflow: auto; width:
+100%"><code>
+
+><b>g 5</b>
+05  8408_1d10         jsr     0x1d, 0x10   A[1d] &lt;- 06  PC &lt;- 10
+10  0800_0001         st      0x00, 0x01   B[01] &lt;- 01
+11  0890_0101         rol     0x01         B[01] &lt;- 02
+12  0890_0101         rol     0x01         B[01] &lt;- 04
+13  0890_0101         rol     0x01         B[01] &lt;- 08
+14  4980_0301         andto   #0x03, 0x01  B[01] &lt;- 00
+15  0062_011a         jeq     0x01, 0x1a                PC &lt;- 1a
+1a  08a0_0000         asl     0x00         B[00] &lt;- 03
+1b  4018_ff1d         jmp     0x1d                      PC &lt;- 1d
+1d  4018_ff06         jmp     0x06                      PC &lt;- 06
+06  802a_0305         incjne  0x03, 0x05   A[03] &lt;- 81  PC &lt;- 05
+05  8408_1d10         jsr     0x1d, 0x10   A[1d] &lt;- 06  PC &lt;- 10
+10  0800_0001         st      0x00, 0x01   B[01] &lt;- 03
+11  0890_0101         rol     0x01         B[01] &lt;- 06
+12  0890_0101         rol     0x01         B[01] &lt;- 0c
+13  0890_0101         rol     0x01         B[01] &lt;- 18
+14  4980_0301         andto   #0x03, 0x01  B[01] &lt;- 00
+15  0062_011a         jeq     0x01, 0x1a                PC &lt;- 1a
+1a  08a0_0000         asl     0x00         B[00] &lt;- 07
+1b  4018_ff1d         jmp     0x1d                      PC &lt;- 1d
+1d  4018_ff06         jmp     0x06                      PC &lt;- 06
+06  802a_0305         incjne  0x03, 0x05   A[03] &lt;- 82  PC &lt;- 05
+05  8408_1d10         jsr     0x1d, 0x10   A[1d] &lt;- 06  PC &lt;- 10
+10  0800_0001         st      0x00, 0x01   B[01] &lt;- 07
+11  0890_0101         rol     0x01         B[01] &lt;- 0e
+12  0890_0101         rol     0x01         B[01] &lt;- 1c
+13  0890_0101         rol     0x01         B[01] &lt;- 38
+14  4980_0301         andto   #0x03, 0x01  B[01] &lt;- 00
+15  0062_011a         jeq     0x01, 0x1a                PC &lt;- 1a
+1a  08a0_0000         asl     0x00         B[00] &lt;- 0f
+1b  4018_ff1d         jmp     0x1d                      PC &lt;- 1d
+1d  4018_ff06         jmp     0x06                      PC &lt;- 06
+06  802a_0305         incjne  0x03, 0x05   A[03] &lt;- 83  PC &lt;- 05
+05  8408_1d10         jsr     0x1d, 0x10   A[1d] &lt;- 06  PC &lt;- 10
+10  0800_0001         st      0x00, 0x01   B[01] &lt;- 0f
+11  0890_0101         rol     0x01         B[01] &lt;- 1e
+12  0890_0101         rol     0x01         B[01] &lt;- 3c
+13  0890_0101         rol     0x01         B[01] &lt;- 78
+
+>
+</code></pre>

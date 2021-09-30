@@ -1,0 +1,182 @@
+Power switch:
+  turn it on, power should come on
+
+LED display:
+  try 88888888 address 88, make sure no broken segments.
+
+Keypad:
+  try all buttons, make sure they all work
+
+Serial console:
+  Should see greeting on console.
+  Should be able to type.
+
+=== Clock LED: should blink when we step
+
+=== Try all input LEDs
+  55AAAA55 insn
+  AA5555AA insn
+  55 AA in loaded data
+  AA 55 in loaded data
+
+=== Try all output leds
+  55 AA on PC
+  55 AA on write data
+
+=== Try pc.asm test to verify PC, PC incremter and jump MUX.
+
+       === Test PC and PC mux set to jump:
+
+         Load it with FF   Verify PC bits can be loaded
+         Load it with 00
+            repeat
+         Try 55 and AA also to check for adjacent short..
+
+       === Test PC incrementer and PC mux set to step:
+
+       Bit 0:
+         in    c_out out
+         0      0     1  E
+         1      1     0  F
+
+       Bit 1 - 7:
+       c_in in  c_out out
+          0  0      0   0  A
+          0  1      0   1  B
+          1  0      0   1  C
+          1  1      1   0  D
+
+       Set PC and step:
+         0 => 1	Tests all A, tests E
+
+         AA => AB	Tests all B
+         54 => 55
+
+         1 => 2	Tests all C (test F)
+         3 => 4
+         7 => 8
+         F => 10
+         1F => 20
+         3F => 40
+         7F => 80
+
+         FF => 00      Tests all D, tests F
+
+=== Try jsr.asm to test JSR MUX
+
+    === Test JSR MUX set to JSR:
+
+      put instruction with JSR bit set into 54 and A9
+      step to 54: should see 55 on write data
+      step to A9: should see AA on write data
+
+== Try inout.asm to test input and ouptut ports
+
+     === Test input port (and LEDs)
+            Try in => out loop test.  Try each bit, look at output LEDs.
+            Try in => mem loop test.  Try each bit, look at LED display.
+
+     === Test output port (and LEDs)
+            Set and clear each bit, check LEDs.
+            set/clear with both relay driver and chip driver
+
+=== Test carry flag: set it and clear (check LED)
+       check carry flag out: add with it set and clear
+       set/clear with both relay driver and chip driver
+
+=== Try alu.asm
+
+     === Try condition logic:
+            Try Z set and clear
+            Try C set and clear
+            Try N set and clear
+            Try invert bit
+
+             Look at jump LED
+             Make sure PC actually jumps (make sure driver relays OK).
+
+     === Test ALU
+      === AND MUX and mode
+            try 55 55 -> 55
+                55 AA -> 00
+                AA 55 -> 00
+                AA AA -> AA
+
+               checks A gate in pass
+               checks B gate in pass
+               checks and_mux in AND
+               checks ROR mux in pass
+
+     === test ROR mux
+        pass through:
+            write 55 and AA
+            try carry flag, both set and clear
+            try zero condition logic, both set and clear
+
+        rotate:
+            write 1_55 -> AA_1
+            write 0_AA -> 55_0
+              try zero condition logic to make sure inverted carry out works in
+              rotate mode.
+
+     === Try ALU bits in add mode
+
+       a  a_l  b  c  c_l   and sum c_out c_out_l
+       -  -    -  -  -      -   -  -     -
+       0  1    0  0  1      0   0  0     1       A
+       1  0    0  0  1      0   1  0     1       A
+       0  1    1  0  1      0   1  0     1       A
+       1  0    1  0  1      1   0  1     0       B
+
+       0  1    0  1  0      0   1  0     1       B
+       1  0    0  1  0      0   0  1     0       C
+       0  1    1  1  0      0   0  1     0       C
+       1  0    1  1  0      1   1  1     0       C
+
+    Tests A:
+      A = 55, AA, 00 (B = 0)
+      B = 55, AA (A = 0)
+
+    Tests B:
+      A = 55, B = 55 => 0_AA
+      A = AA, B = AA, CINV = 1 => 1_55
+
+    Tests C:
+      A = 0, B = 1, C = 1
+      A = 1, B = 0
+
+      A = 1, B = 3
+      A = 3, B = 1
+
+      A = 3, B = 7
+      A = 7, B = 3
+
+      A = 7, B = F
+      A = F, B = 7
+
+      A = F, B = 1F
+      A = 1F, B = F
+
+      A = 1F, B = 3F
+      A = 3F, B = 1F
+
+      A = 3F, B = 7F
+      A = 7F, B = 3F
+
+      A = 7F, B = FF
+      A = FF, B = 7F
+
+      A = FF, B = FF
+
+
+
+=== test B gate:
+   ALU and
+    A = FF
+    B = FF  B off, should get 0.  B on, should get FF
+    B = 55  B off, should get 0.  B on, should get 55
+    B = AA  B off, should get 0.  B on, should get AA
+
+=== Try arg A complementer
+
+=== Try carry enable / complementer

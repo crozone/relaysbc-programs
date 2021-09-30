@@ -1,0 +1,124 @@
+<p></p>
+<h3>Relays</h3>
+
+<p>Relays, one of the earliest electronic devices, invented by Joseph Henry in
+1835, seem simple enough: energize an electro-magnet to pull an armature
+that closes a switch.  De-energize the electro-magnet so that a spring
+returns the armature to its original position to open the switch.  The
+switch can pass more current than is needed to energize the electro-magnet,
+so relays act as digital amplifiers.</p>
+
+<h3>Basic relay terminology</h3>
+
+<p>There is a naming scheme use to indicate the number of switches and
+terminals a relays contains.  Poles refer to the number of switches
+controlled by a single electro-magnet.  Throws refer to the number of
+contacts each switch has: single-throw (for a basic on-off switch) or
+double-throw (for an on-on switch with both "normally open" and "normally
+closed" contacts in addition to the common one).  These combinations are all
+very common:</p>
+
+<ul>
+<li>SPST	- Single Pole, Single-Throw</li>
+<li>SPDT	- Single Pole, Double-Throw</li>
+<li>DPST	- Double Pole, Single-Throw</li>
+<li>DPDT	- Double Pole, Double-Throw</li>
+<li>QPST	- Quad Pole, Single-Throw</li>
+<li>QPDT	- Quad Pole, Double-Throw</li>
+</ul>	
+ 
+<img src="relay.gif"/>
+
+<p>Figure 1 - Schematic symbol for SPDT Relay</p>
+
+<p>Relay connections:</p>
+<ul>
+<li>Coil X and Coil Y: Power input into the
+electromagnet.</li>
+<li>C: Common</li>
+<li>N.O.: Normally Open</li>
+<li>N.C.: Normally Closed</li>
+</ul>
+
+<img src="phys.gif"/>
+
+<p>Figure 2 Physical Diagram</p>
+
+<h3>Advanced Properties</h3>
+
+<p>Although seemingly simple device, their details are quite complex and relays
+have many "interesting" properties which are either useful to exploit or are
+pitfalls to be avoided.</p>
+
+<h3>Pickup Voltage</h3>
+<p>The pickup voltage is the minimum voltage across the coil needed to close
+the switch.  For example, for one particular "12V" relay, the pickup voltage
+is 7.5V.</p>
+
+<h3>Dropout Voltage</h3>
+<p>The dropout voltage is the maximum voltage below which a closed switch will
+open.  For example, for the same "12V" relay, the dropout voltage is 3.3
+V.</p>
+
+<p>Why are pickup and dropout voltages so different (or different at all) you
+might ask?  The equation for the force generated on the armature is:</p>
+
+
+<p>F = 2*pi*(N^2) / (A * (R0 + x/A)^2)</p>
+
+<p>Where:</p>
+<ul>
+<li>N is ampere-turns</li>
+<li>A is area of pole piece</li>
+<li>x is distance between pole-piece and armature</li>
+<li>R0 is reluctance of the iron pieces</li>
+</ul>
+
+<p>The key point is that the force is stronger when the distance x is smaller
+(when the relay is closed), so lower "ampere-turns" (current) is needed to
+generate the same force.</p>
+
+<h3>Heat</h3>
+<p>The resistance of the copper wire used in the coil increases with
+temperature, so the current through the relay will decrease if the voltage
+across the coil is held constant.  The magnetic field strength is directly
+proportional to current, so the pickup and dropout voltages do vary with
+temperature.</p>
+
+<h3>Contacts</h3>
+<p>The most troublesome part of a relay (or any switch) is the switch contacts. 
+There is no ideal material for contacts:</p>
+
+<h3>Bounce</h3>
+<p>The switch contacts bounce when the relay is opened or closed, so you do not
+get a clean electrical edge.</p>
+
+<h3>Dirt</h3>
+<p>If particles of dirt get between the contacts, the switch will not be
+closed.  Some relays are sealed and have bifurcated contacts (have two
+contacts in parallel) to help prevent this.</p>
+
+<h3>Contact erosion</h3>
+<p>The contacts will erode over time due to mechanical wear and electrical
+arcing.</p>
+
+<h3>Contact welding</h3>
+
+<p>An arc may be strong enough to cause the contacts to weld together so that
+the relay "sticks" closed.</p>
+
+<h3>Contact Carbonizing</h3>
+<p>Soot from arcing can coat the contacts so badly that an electrical
+connection is not made when the relay is closed.</p>
+
+<h3>Wetting Current</h3>
+<p>It turns out that having too low a current through the contacts also
+leads to reliability problems.  A minimum "wetting current" is useful to
+clean oxide coatings off of the contacts.  Oxide can build up on contacts to
+such a degree that a connection is not made even when the contacts are
+closed.</p>
+
+<h3>Contact Force</h3>
+<p>When a relay is energized, there is a minimum amount of force needed
+beyond the minimum needed to just close the contacts.  This increases the
+surface area of contacting region to provide a better connection.</p>

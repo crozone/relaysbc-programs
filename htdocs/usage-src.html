@@ -1,0 +1,83 @@
+<h3>Relay Computer Quick Usage Guide</h3>
+
+<h3>LEDs</h3>
+
+<p>This diagram shows the discrete LEDs:</p>
+
+<center><img src="leds.gif"></center>
+
+<h3>Display</h3>
+
+<p>The 8-digit data display shows to contents of the memory address shown on
+the 2-digit address display.  If the upper 16-bits of memory contains a halt
+instruction (wra and wrb bits both set), then it's assumed that the memory
+address is being used for a data byte, so only the lower byte and the lower
+bytes of the next three addresses are shown.  Decimal points are illuminated
+in this mode:</p>
+
+<p><b>00.00.00.00</b>&nbsp;&nbsp;&nbsp;&nbsp; Showing data bytes of four addresses</p>
+
+<p>If memory contains any other instruction, then the full 32-bit
+instruction is shown.  Decimal points are off in this mode:</p>
+
+</p><b>00 00 00 00</b>&nbsp;&nbsp;&nbsp;&nbsp; Showing instruction in a single address</p>
+
+<h3>Data / Address entry</h3>
+
+<p>Type 2 - 8 hex digits.  Use <b>&larr;</b> key for backspace.  Backspace all
+digits to cancel data entry mode.</p>
+
+<h3>Save / Restore memory to non-volatile storage</h3>
+
+<p><b>2nd DEC</b>&nbsp;&nbsp;&nbsp;&nbsp; Restore memory from non-volatile</p>
+
+<p><b>2nd INC</b>&nbsp;&nbsp;&nbsp;&nbsp; Save memory to non-volatile
+(Only lower 128 addressess are saved/restored).</p>
+
+<h3>Modify display address</h3>
+
+<p><b>&lt;address> ADR</b>&nbsp;&nbsp;&nbsp;&nbsp; Set Address</p>
+
+<p><b>INC</b>&nbsp;&nbsp;&nbsp;&nbsp; Increment address</p>
+<p><b>DEC</b>&nbsp;&nbsp;&nbsp;&nbsp; Decrement address</p>
+
+<h3>Write data to memory</h3>
+
+<p><b>&lt;data> DEP</b>&nbsp;&nbsp;&nbsp;&nbsp; Write data (deposit) to current address</p>
+<p><b>&lt;data> INC</b>&nbsp;&nbsp;&nbsp;&nbsp; Write data to current address and
+increment address</p>
+<p><b>&lt;data> DEC</b>&nbsp;&nbsp;&nbsp;&nbsp; Write data to current address and decrement
+address</p>
+
+<h3>Change operating frequency</h3>
+
+<p><b>2nd 0</b>&nbsp;&nbsp;&nbsp;&nbsp; Speed controlled by knob</p>
+<p><b>2nd 1</b>&nbsp;&nbsp;&nbsp;&nbsp; Slowest</p>
+<p>...</p>
+<p><b>2nd F</b>&nbsp;&nbsp;&nbsp;&nbsp; Fastest</p>
+
+<p>The default speed is 5</p>
+
+<h3>Program execution</h3>
+
+<p><b>&lt;address> STP</b>&nbsp;&nbsp;&nbsp;&nbsp; Set current Program Counter</p>
+<p><b>STP</b>&nbsp;&nbsp;&nbsp;&nbsp; Single Step</p>
+<p><b>&lt;address> RUN</b>&nbsp;&nbsp;&nbsp;&nbsp; Set Program Counter and run</p>
+<p><b>RUN</b>&nbsp;&nbsp;&nbsp;&nbsp; Run until halt instruction or STP key
+pressed</p>
+
+<h3>Input and output bits</h3>
+
+<p>There are four output bits implemented as relay flip-flops.  Each of
+these bits is available externally as relay contacts.  Both the normally
+open and normally closed contacts are wired to the connectors.</p>
+
+<p>12V and ground are wired to external connectors also.  These may be used
+along with the output relay contacts to control small lamps.</p>
+
+<p>There are four input bits wired to connectors.  It is expected that
+switch closures are connected to these.  When a switch is closed, the input
+registers a '1'.  When a switch is open, the input registers a '0'.</p>
+
+<p>If I/O is not needed, the outputs may be connected to the inputs to
+produce an extra programmable register implemented with relay flip-flops.</p>

@@ -1,10 +1,8 @@
-# Other 
+# Util
 
-Other miscellaneous functions and programs.
+Utility functions and programs.
 
-## Programs
-
-### Double-dabble
+## Double-dabble
 
 Source: `double-dabble.asm`
 
