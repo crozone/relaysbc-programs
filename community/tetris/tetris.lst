@@ -1,0 +1,211 @@
+Pass 1...
+
+0 errors detected in pass 1
+
+Pass 2...
+1                       ; Tetris implementation
+2                       ; Ryan Crosby 2021
+3                       ;
+4                       ; Run from 0x01.
+5                       ;
+6                       ; TODO: Description with controls etc.
+7                       ;
+8                       
+9                       ; Catch for any indirect jumps to null (0x00).
+10                      ; Also serves as a temporary register or discard register for data.
+11                      ;
+12      00              	org	0x00
+13      00 c810_ff00    	halt
+14                      
+15                      ; ENTRY POINT
+16      01              	org	0x01
+17      01 4018_ff16    exec	jmp	run	; Jump to start of program
+18                      
+19                      ; Constants
+20                      ;
+21      02 c810_ff23    block_char	data	0x23	; #
+22      03 c810_ff20    empty_char	data	0x20	; Space
+23      04 c810_ff0d    newline_char	data	0x0D	; Carriage Return CR \r
+24      05 c810_ff0a    	data	0x0A	; Linefeed LF \n
+25                      
+26                      ; Pieces templates
+27                      ;
+28      06 c810_ff80    test_piece	data	0x80
+29      07 c810_ff01    	data	0x01
+30                      
+31                      ; T piece
+32                      ;
+34                      ;
+35                      ; 0000 = 0
+36                      ; 1110 = E
+37                      ; 0100 = 4
+38                      ; 0000 = 0
+39      08 c810_ff0e    	data	0x0E
+40      09 c810_ff40    	data	0x40
+41                      ; 0100 = 4
+42                      ; 1100 = C
+43                      ; 0100 = 4
+44                      ; 0000 = 0
+45      0a c810_ff4c    	data	0x4C
+46      0b c810_ff40    	data	0x40
+47                      ; 0100 = 4
+48                      ; 1110 = E
+49                      ; 0000 = 0
+50                      ; 0000 = 0
+51      0c c810_ff4e    	data	0x4E
+52      0d c810_ff00    	data	0x00
+53                      ; 0100 = 4
+54                      ; 0110 = 6
+55                      ; 0100 = 4
+56                      ; 0000 = 0
+57      0e c810_ff46    	data	0x46
+58      0f c810_ff40    	data	0x40
+59                      
+60                      ; S piece
+61                      ;
+63                      ;
+64                      ; 0110 = 6
+65                      ; 0100 = 4
+66                      ; 1100 = C
+67                      ; 0000 = 0
+68      10 c810_ff64    	data	0x64
+69      11 c810_ffc0    	data	0xC0
+70                      ; 1000 = 8
+71                      ; 1110 = E
+72                      ; 0010 = 2
+73                      ; 0000 = 0
+74      12 c810_ff8e    	data	0x8E
+75      13 c810_ff20    	data	0x20
+76                      
+77                      
+78                      ; Game state
+79                      ;
+80                      ;score	data	2;
+81      14 c810_ff19    gameboard	data	25 ; 20 x 10 squares = 200 bits = 25 bytes
+82                      
+83                      
+84                      
+85                      
+86      15              draw_loop_i	skip	1
+89      16 4800_fc15    	st	#-4, draw_loop_i
+90      17 4800_0824    	st	#t_piece, piece_ptr
+91      18 4800_0025    	st	#0, pose
+95      19 4800_0026    	st	#0, erase
+96      1a 8408_482b    	jsr	draw_piece_ret, draw_piece
+98      1b 4800_0126    	st	#1, erase
+99      1c 8408_482b    	jsr	draw_piece_ret, draw_piece
+102     1d 4880_0125    	inc	pose
+104     1e 802a_1519    	incjne	draw_loop_i, draw_loop_start
+106     1f 9800_4500    	outc	0x45 ; H
+107     20 9800_4100    	outc	0x41 ; A
+108     21 9800_4c00    	outc	0x4C ; L
+109     22 9800_5400    	outc	0x54 ; T
+111     23 c810_ff00    	halt
+112                     
+113                     ; Test code for printing piece in all 4 poses (0, 1, 2, 3)
+114                     ;
+115                     ; Arguments
+116     24              piece_ptr	skip	1 ; Address of piece
+117     25              pose	skip	1 ; Pose (angle) of piece. 0, 1, 2, 3.
+118     26              erase	skip	1 ; If not zero, write the piece in spaces instead of block character, in order to erase it.
+119                     ; Private
+120     27              tmp_piece	skip	2 ; Temp storage for piece
+121     29              loop_i	skip	1 ; Loop i counter
+122     2a              loop_j	skip	1 ; Loop counter
+123                     
+126     2b 006a_262e    	jne	erase, use_erase_char
+127     2c 0800_0243    	st	block_char, print_char
+128     2d 4018_ff2f    	jmp	continue
+129     2e 0800_0343    use_erase_char	st	empty_char, print_char
+132     2f 0880_2525    	lsl	pose	; Multiply pose by 2 to get bytes offset
+135     30 0800_2436    	st	piece_ptr, cpy_A
+136     31 0880_2536    	addto	pose, cpy_A
+137     32 0800_3638    	st	cpy_A, cpy_B
+138     33 4880_0138    	inc	cpy_B
+140     34 0a00_2525    	lsr	pose ; Restore pose
+141                     
+143     35 4800_0027    	clr	tmp_piece
+144     36 8080_2700    cpy_A	add	tmp_piece, 0
+145                     
+147     37 4800_0028    	clr	tmp_piece+1
+148     38 8080_2800    cpy_B	add	tmp_piece+1, 0
+150     39 4800_fc29    	st	#-4, loop_i	; Prep loop counter
+152     3a 4800_0049    	clr	cur_mov_n
+153     3b 4800_fc2a    	st	#-4, loop_j	; Prep loop counter
+156     3c 0880_2828    	lsl	tmp_piece+1	; Shift left. Most sig bit goes into carry, 0 goes into least sig bit.
+157     3d 0890_2727    	rol	tmp_piece
+158     3e 006c_0041    	jcs	do_block
+159     3f 4880_0149    	inc	cur_mov_n ; Increment the number of empty blocks we will skip
+160     40 4018_ff44    	jmp	after
+161     41 8408_514a    do_block	jsr	cur_mov_ret, cur_mov ; Fill in all the previous empty blocks
+162     42 4800_0049    	clr	cur_mov_n
+163     43 d800_0000    print_char	outc	#0	; Print character. Will be changed by setup code based on "erase" value.
+164     44 802a_2a3c    after	incjne	loop_j, loop_drawline
+165                     
+166     45 9800_0400    	outc	newline_char	; New line
+167     46 9800_0500    	outc	newline_char+1
+168     47 802a_293a    	incjne	loop_i, loop_outer
+169     48 4018_ff00    draw_piece_ret	jmp	0
+170                     
+171     49              cur_mov_n	skip	1
+173     4a 0062_4951    	jeq	cur_mov_n, cur_mov_ret
+174     4b 4800_304f    	st	#0x30, move_char
+175     4c 0880_494f    	addto	cur_mov_n, move_char
+177     4d d800_1b00    	outc	#0x1B	; ESC
+178     4e d800_5b00    	outc	#0x5B	; [
+179     4f 9800_0000    move_char	outc	0	; 1-9 character right
+180     50 d800_4300    	outc	#0x43	; C (A = Up, B = Down, C = Forward, D = Back)
+181     51 4018_ff00    cur_mov_ret	jmp	0
+182                     
+183                     
+
+0 errors detected in pass 2
+
+Symbol table:
+after = 0x44
+block_char = 0x2
+continue = 0x2f
+cpy_A = 0x36
+cpy_B = 0x38
+cur_mov = 0x4a
+cur_mov_n = 0x49
+cur_mov_ret = 0x51
+do_block = 0x41
+draw_loop_i = 0x15
+draw_loop_start = 0x19
+draw_piece = 0x2b
+draw_piece_ret = 0x48
+empty_char = 0x3
+erase = 0x26
+exec = 0x1
+gameboard = 0x14
+loop_drawline = 0x3c
+loop_i = 0x29
+loop_j = 0x2a
+loop_outer = 0x3a
+move_char = 0x4f
+newline_char = 0x4
+piece_ptr = 0x24
+pose = 0x25
+print_char = 0x43
+run = 0x16
+s_piece = 0x10
+t_piece = 0x8
+test_piece = 0x6
+tmp_piece = 0x27
+use_erase_char = 0x2e
+
+Memory image:
+00: c810ff00 4018ff16 c810ff23 c810ff20 c810ff0d c810ff0a c810ff80 c810ff01
+08: c810ff0e c810ff40 c810ff4c c810ff40 c810ff4e c810ff00 c810ff46 c810ff40
+10: c810ff64 c810ffc0 c810ff8e c810ff20 c810ff19
+16: 4800fc15 48000824
+18: 48000025 48000026 8408482b 48000126 8408482b 48800125 802a1519 98004500
+20: 98004100 98004c00 98005400 c810ff00
+2b: 006a262e 08000243 4018ff2f 08000343 08802525
+30: 08002436 08802536 08003638 48800138 0a002525 48000027 80802700 48000028
+38: 80802800 4800fc29 48000049 4800fc2a 08802828 08902727 006c0041 48800149
+40: 4018ff44 8408514a 48000049 d8000000 802a2a3c 98000400 98000500 802a293a
+48: 4018ff00
+4a: 00624951 4800304f 0880494f d8001b00 d8005b00 98000000
+50: d8004300 4018ff00

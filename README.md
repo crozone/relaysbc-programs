@@ -20,6 +20,7 @@ Community contributed programs are placed in `community/`.
 | [Hardware Tests](hardware-tests/) | Joe Allen | Test programs for validating the correct assembly and operation of the computer hardware |
 | [Primes](community/primes/) | Ryan Crosby | Prime number search programs |
 | [Pi](community/pi/) | Dag Stroman | Calculate the digits of Pi to various accuracies |
+| [Tetris](community/tetris/) | Ryan Crosby | A barebones Tetris game implementation |
 | [Util](community/util/) | Ryan Crosby | Miscellaneous utility functions |
 
 ## Tools
