@@ -315,12 +315,22 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 	while (fgets(buf, sizeof(buf) - 1, f)) {
-		unsigned int addr;
-		unsigned int insn;
-		int rtn = sscanf(buf, "%x: %x", &addr, &insn);
-		if (2 == rtn) {
-			mem[addr] = insn;
-			printf("%2.2x: %8.8x\n", addr, insn);
+		unsigned int base_addr;
+		unsigned int insn_list[8];
+		int rtn = sscanf(buf,
+				"%x: %x %x %x %x %x %x %x %x",
+				&base_addr,
+				&insn_list[0], &insn_list[1], &insn_list[2], &insn_list[3],
+				&insn_list[4], &insn_list[5], &insn_list[6], &insn_list[7]
+				);
+		if (rtn >= 2) {
+			int i;
+			for(i = 0; i < rtn - 1; i++) {
+				unsigned int addr = base_addr + i;
+				unsigned int insn = insn_list[i];
+				mem[addr] = insn;
+				printf("%2.2x: %8.8x\n", addr, insn);
+			}
 		}
 	}
 	fclose(f);
