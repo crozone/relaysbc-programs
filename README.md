@@ -45,7 +45,8 @@ Firmware files for the various microcontrollers included on the sbrc
 
 | Program | Author | Description |
 | --- | --- | --- |
-| [htdocs](htdocs/) | Joe Allen | HTML documentation for the sbrc. |
+| [docs](docs/) | Joe Allen | Reference card, assembly instructions, BoM, PCB drawings, schematics |
+| [htdocs](htdocs/) | Joe Allen | HTML documentation |
 
 
 ## License
