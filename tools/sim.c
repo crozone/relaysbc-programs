@@ -300,7 +300,11 @@ int main(int argc, char *argv[])
 
 	outc_count=0;
 
-	for (x = 1; argv[x]; ++x) {
+	for (x = 1; x < argc; ++x) {
+		if (!argv[x][0]) {
+			/* Empty argument */
+			continue;
+		}
 		if (!strcmp(argv[x], "-pc")) {
 			pc = strtol(argv[x + 1], NULL, 16);
 			++x;
@@ -309,24 +313,34 @@ int main(int argc, char *argv[])
 			printf("  -pc xx      Initial PC value if not zero\n");
 			printf("  -h, --help  Print this help text\n");
 			return -1;
-		} else if (argv[x][0] == '-') {
+		}
+		else if (argv[x][0] != '-' || !strcmp(argv[x], "-")) {
+			if (file_name) {
+				printf("error: only one file name allowed\n");
+				return -1;
+			} else {
+				file_name = argv[x];
+			}
+		}
+		else {
 			printf("Unknown option '%s'\n", argv[x]);
 			return -1;
-		} else {
-			file_name = argv[x];
 		}
 	}
 
-	if (!file_name) {
-		fprintf(stderr, "file name missing\n");
-		return -1;
+	if (!file_name || !strcmp(file_name, "-")) {
+		/* Read from stdin if filename omitted or "-" */
+		f = stdin;
+	}
+	else {
+		/* Read from file */
+		f = fopen(file_name, "r");
+		if (!f) {
+			fprintf(stderr, "couldn't open %s\n", file_name);
+			return -1;
+		}
 	}
 
-	f = fopen(file_name, "r");
-	if (!f) {
-		fprintf(stderr, "couldn't open %s\n", file_name);
-		return -1;
-	}
 	while (fgets(buf, sizeof(buf) - 1, f)) {
 		unsigned int base_addr;
 		unsigned int insn_list[8];
