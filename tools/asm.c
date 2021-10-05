@@ -133,8 +133,9 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 
 	if (buf[0] == ';' || !buf[0] || buf[0] == '*') {
 		// Comment line, ignore
-		if (pass)
-			printf("%-7d                 %s\n", line, org);
+		if (pass) {
+			output("%-7d                 %s\n", line, org);
+		}
 		return addr;
 	}
 
@@ -170,8 +171,9 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 
 	if (!table[x].insn) {
 		error1("Unknown instruction '%s'", str);
-		if (pass)
-			printf("%-7d                 %s\n", line, org);
+		if (pass) {
+			output("%-7d                 %s\n", line, org);
+		}
 		set_symbol(label_sy, label_addr);
 		return addr;
 	}
@@ -182,7 +184,7 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 
 	if (type == NONE) {
 		if (pass) {
-			printf("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
+			output("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
 			write_mem(addr, opcode);
 		}
 		++addr;
@@ -193,7 +195,7 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 		rtn = expr(&buf, &right, addr, pass);
 		opcode |= (right & 255);
 		if (pass) {
-			printf("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
+			output("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
 			write_mem(addr, opcode);
 		}
 		++addr;
@@ -204,7 +206,7 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 		rtn = expr(&buf, &right, addr, pass);
 		opcode |= (right & 255) | ((right & 255) << 8);
 		if (pass) {
-			printf("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
+			output("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
 			write_mem(addr, opcode);
 		}
 		++addr;
@@ -224,7 +226,7 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 		}
 		opcode |= (right & 255) | ((left & 255) << 8);
 		if (pass) {
-			printf("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
+			output("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
 			write_mem(addr, opcode);
 		}
 		++addr;
@@ -248,7 +250,7 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 		}
 		opcode |= (right & 255) | ((left & 255) << 8);
 		if (pass) {
-			printf("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
+			output("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
 			write_mem(addr, opcode);
 		}
 		++addr;
@@ -263,7 +265,7 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 		rtn = expr(&buf, &left, addr, pass);
 		opcode |= ((left & 255) << 8);
 		if (pass) {
-			printf("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
+			output("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
 			write_mem(addr, opcode);
 		}
 		++addr;
@@ -276,7 +278,7 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 			label_addr = right;
 		}
 		if (pass) {
-			printf("%-7d %s       %s\n", line, hex(8, addr), org);
+			output("%-7d %s       %s\n", line, hex(8, addr), org);
 		}
 		goto done;
 	} else if (type == ORG) {
@@ -288,7 +290,7 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 			label_addr = right;
 		}
 		if (pass) {
-			printf("%-7d %2.2llx              %s\n", line, addr, org);
+			output("%-7d %2.2llx              %s\n", line, addr, org);
 		}
 		goto done;
 	} else if (type == SKIP) {
@@ -299,7 +301,7 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 			addr += right;
 		}
 		if (pass) {
-			printf("%-7d %2.2llx              %s\n", line, label_addr, org);
+			output("%-7d %2.2llx              %s\n", line, label_addr, org);
 		}
 		goto done;
 	} else if (type == INSN) {
@@ -308,7 +310,7 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 		rtn = expr(&buf, &right, addr, pass);
 		opcode = right;
 		if (pass) {
-			printf("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
+			output("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
 			write_mem(addr, opcode);
 		}
 		++addr;
@@ -319,7 +321,7 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 		rtn = expr(&buf, &right, addr, pass);
 		opcode = (0xC810FF00 + (0xFF & right));
 		if (pass) {
-			printf("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
+			output("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
 			write_mem(addr, opcode);
 		}
 		++addr;
@@ -346,7 +348,7 @@ void dump_mem()
 // One word per line
 //			printf("%2.2x: %8.8lx\n", x, mem[x]);
 // Many words per line
- 			printf("%2.2x:", x);
+ 			output("%2.2x:", x);
 			while (setmem[x]) {
 				printf(" %8.8lx", mem[x]);
 				++x;

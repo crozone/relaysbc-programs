@@ -28,6 +28,9 @@ unsigned int mem[256];
 unsigned char pc;
 int carry_flag;
 
+int outc_count;
+unsigned char outc_buf[1024];
+
 #define CC_N 0x00010000
 #define CC_Z 0x00020000
 #define CC_C 0x00040000
@@ -247,15 +250,22 @@ int step()
 
 	// Output
 	if (insn & OUT) {
-		printf(" OUT=%X", (ror_result & 0xFF));
+		unsigned char out_val = (ror_result & 0xFF);
+		if((insn & WRA) && (insn & WRB)) {
+			printf(" OUTC=%X", out_val);
+			outc_buf[outc_count] = out_val;
+			outc_count++;
+		} else {
+			printf(" OUT=%X", out_val);
+		}
 	}
 
 	// Write back
 	if ((WRA & insn) && !(WRB & insn)) {
 		mem[addra] = (mem[addra] & 0xFFFFFF00) + write_data;
 		printf(" [%2.2X]=%2.2X", addra, write_data);
-	} else if ((WRB & insn) && !(WRA & insn) ||
-	           (WRB & insn) && (WRA & insn) && (IN & insn)) {
+	} else if (((WRB & insn) && !(WRA & insn)) ||
+	           ((WRB & insn) && (WRA & insn) && (IN & insn))) {
 		mem[addrb] = (mem[addrb] & 0xFFFFFF00) + write_data;
 		printf(" [%2.2X]=%2.2X", addrb, write_data);
 	}
@@ -280,12 +290,15 @@ int main(int argc, char *argv[])
 	int x;
 	char *file_name = 0;
 	char buf[1024];
+	int total_insn = 0;
 
 	pc = 0;
 	carry_flag = 0;
 	for (x = 0; x != 256; ++x) {
 		mem[x] = 0xC810FF00;
 	}
+
+	outc_count=0;
 
 	for (x = 1; argv[x]; ++x) {
 		if (!strcmp(argv[x], "-pc")) {
@@ -324,10 +337,9 @@ int main(int argc, char *argv[])
 				&insn_list[4], &insn_list[5], &insn_list[6], &insn_list[7]
 				);
 		if (rtn >= 2) {
-			int i;
-			for(i = 0; i < rtn - 1; i++) {
-				unsigned int addr = base_addr + i;
-				unsigned int insn = insn_list[i];
+			for(x = 0; x < rtn - 1; x++) {
+				unsigned int addr = base_addr + x;
+				unsigned int insn = insn_list[x];
 				mem[addr] = insn;
 				printf("%2.2x: %8.8x\n", addr, insn);
 			}
@@ -336,9 +348,12 @@ int main(int argc, char *argv[])
 	fclose(f);
 
 	printf("Starting at %2.2x\n", pc);
-	while (!step());
+	while (!step()) total_insn++;
+
+	printf("Total instructions: %d\n", total_insn);
 
 	// Dump memory
+	printf("Final memory state:\n");
 	for (x = 0; x != 256; x += 16) {
 		int y;
 		printf("%2.2x:", x);
@@ -346,6 +361,16 @@ int main(int argc, char *argv[])
 			printf(" %2.2x", 0xFF & mem[x+y]);
 			if (y == 7)
 				printf(" ");
+		}
+		printf("\n");
+	}
+
+	// Write console output (outc)
+	if(outc_count > 0) {
+		printf("Console output (len %d):\n", outc_count);
+		for(x = 0; x < outc_count; x++) {
+			unsigned char outc_val = outc_buf[x];
+			putchar(outc_val);
 		}
 		printf("\n");
 	}

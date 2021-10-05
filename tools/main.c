@@ -61,7 +61,11 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Couldn't open file '%s'\n", file);
 		return -1;
 	}
-	printf("Pass 1...\n");
+
+	/* Text written with output(...) macro will start with a comment when comment_on = 1 */
+	comment_on = 1;
+
+	output("Pass 1...\n");
 	addr = 0;
 	line = 0;
 	ecount = 0;
@@ -70,25 +74,37 @@ int main(int argc, char *argv[])
 			buf[strlen(buf)-1] = 0;
 		addr = assemble(addr, buf, 0);
 	}
-	printf("\n%d errors detected in pass 1\n", ecount);
+	printf("\n");
+	output("%d errors detected in pass 1\n", ecount);
 	rewind(f);
 	addr = 0;
 	line = 0;
 	ecount = 0;
-	printf("\nPass 2...\n");
+	printf("\n");
+	output("Pass 2...\n");
 	while(fgets(buf, sizeof(buf) - 1, f)) {
 		if (strlen(buf) && buf[strlen(buf)-1] == '\n')
 			buf[strlen(buf)-1] = 0;
 		addr = assemble(addr, buf, 1);
 	}
 	fclose(f);
-	printf("\n%d errors detected in pass 2\n", ecount);
-	printf("\nSymbol table:\n");
+	printf("\n");
+	output("%d errors detected in pass 2\n", ecount);
+	printf("\n");
+	output("Symbol table:\n");
 	show_syms();
-	printf("\nMemory image:\n");
+	printf("\n");
+	output("Memory image:\n");
+
+	/* Print memory dump without comments */
+	comment_on = 0;
+
 	dump_mem();
-	if (ecount)
+
+	if (ecount) {
 		return -1;
-	else
+	}
+	else {
 		return 0;
+	}
 }

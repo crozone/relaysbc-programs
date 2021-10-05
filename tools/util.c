@@ -22,6 +22,8 @@
 
 #include "util.h"
 
+int comment_on;
+
 int line;
 char *file;
 int ecount;
@@ -79,10 +81,12 @@ void show_syms()
 			sorted[x++] = sy;
 		qsort(sorted, x, sizeof(struct symbol *), sy_comp);
 		for (x = 0; x != count; ++x) {
-			if (sorted[x]->valid)
-				printf("%s = 0x%llx\n", sorted[x]->name, sorted[x]->val);
-			else
-				printf("%s = ???\n", sorted[x]->name);
+			if (sorted[x]->valid) {
+				output("%s = 0x%llx\n", sorted[x]->name, sorted[x]->val);
+			}
+			else {
+				output("%s = ???\n", sorted[x]->name);
+			}
 		}
 	}
 }
