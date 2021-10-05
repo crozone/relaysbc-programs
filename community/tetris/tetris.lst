@@ -20,7 +20,7 @@
 ; 15                      
 ; 16                      ; ENTRY POINT
 ; 17      01              	org	0x01
-; 18      01 4018_ff45    exec	jmp	run	; Jump to start of program
+; 18      01 4018_ff13    exec	jmp	run	; Jump to start of program
 ; 19                      
 ; 20                      ; Constants
 ; 21                      ;
@@ -73,7 +73,7 @@
 ; 69                      
 ; 70                      
 ; 71                      
-; 72                      ; Game state - TODO: Put this at the end of memory,	> 127,	to save EEPROM programmable space.
+; 72                      ; Game state
 ; 73                      ;
 ; 74      0d              current_cleared	skip	1
 ; 75                      
@@ -82,264 +82,325 @@
 ; 78      10              current_x	skip	1
 ; 79      11              current_y	skip	1
 ; 80                      
-; 81                      ; GAME BOARD
-; 82                      ;
-; 83                      ; Left of board is X = 0; right is X = 9
-; 84                      ; Bottom of board is Y = 0, top is Y = 19
-; 85                      ;
-; 86                      ; The game board is made up of 20 rows, of 10 columns each.
-; 87                      ; Each row is represented by two bytes (16 bits) - 6 bits are wasted on the odd bytes.
-; 88                      ; The left of the board is the LSB of the lower byte,	the right of the board is the 2nd bit of the upper byte.
-; 89                      ; The lowermost row is row Y=0, and is represented by bytes 0 (left) and 1 (right).
-; 90                      ; The uppermost row is row Y=19, and is represented by bytes 38 (left) and 39 (right). 
-; 91                      ;
-; 92                      ; BOARD LAYOUT:
-; 93                      ;
-; 94                      ; Row Y=3 : Byte 6 --> [ 01234567 | 89 XXXXXX ] <-- Byte 7
-; 95                      ; Row Y=2 : Byte 4 --> [ 01234567 | 89 XXXXXX ] <-- Byte 5
-; 96                      ; Row Y=1 : Byte 2 --> [ 01234567 | 89 XXXXXX ] <-- Byte 3
-; 97                      ; Row Y=0 : Byte 0 --> [ 01234567 | 89 XXXXXX ] <-- Byte 1
-; 98                      ;
-; 99                      ; ROW LAYOUT:
-; 100                     ;
-; 101                     ;	LEFT            RIGHT
-; 102                     ; X:	0 1 2 3 4 5 6 7   8 9
-; 103                     ;	- - - - - - - -   - -
-; 104                     ; Bit:	0 1 2 3 4 5 6 7 | 0 1
-; 105                     ;	^ LSB     MSB ^ | ^ LSB
-; 106                     ; Byte:	0               | 1
-; 107                     ;
-; 108     12 c810_ffff    	data	0xFF ; Provide a solid boarder "below" the gameboard, at Y=-1.
-; 109     13 c810_ffff    	data	0xFF ; This simplifies collision detection.
-; 110     14              gameboard	skip	40
+; 81                      
+; 82                      
+; 83                      ; Start of application code
+; 84                      ;
+; 85      12              test_loop_i	skip	1
+; 87      13 4800_9f6a    	st	#gameboard-2,	render_ptr
+; 88      14 4800_006b    	st	#0,	render_row
+; 89      15 4800_156c    	st	#21,	render_rows
+; 90      16 4800_006d    	st	#0,	render_col
+; 91      17 4800_0c6e    	st	#12,	render_cols
+; 92                      
+; 93      18 8408_9073    	jsr	render_ret,	render
+; 94      19 4018_ff30    	jmp	halt_prog
+; 95                      
+; 100                     
+; 101     1a 4800_000e    	st	#0,	current_piece	; TODO: Randomize
+; 102     1b 4800_000f    	st	#0,	current_pose	; Initial piece pose = 0
+; 103     1c 4800_0010    	st	#0,	current_x
+; 104     1d 4800_1011    	st	#16,	current_y	; Initial piece position in top of board (20 - 4)
+; 105                     
+; 106     1e 4800_fa12    	st	#-6,	test_loop_i
+; 108     1f 4880_010e    	inc	current_piece
+; 109                     
+; 110     20 8408_6954    	jsr	prep_piece_ret,	prep_piece
 ; 111                     
-; 112                     
-; 113                     ; Piece staging buffer.
-; 114                     ; This buffer contains the current piece in the selected pose, in the same format as the game board.
-; 115                     ; It is 4 rows high, each row is 2 bytes, just like the game board.
-; 116                     ; This allows easy left/right movement of the piece (simple bitwise rotation of each row left or right),
-; 117                     ; and easy updating of, or collision checking with, the game board (with bitwise operations).
-; 118     3c              piece_stage	skip	8
-; 119                     
-; 120                     ; Start of application code
-; 121                     ;
-; 122     44              test_loop_i	skip	1
-; 126                     
-; 131                     
-; 132     45 4800_000e    	st	#0,	current_piece	; TODO: Randomize
-; 133     46 4800_000f    	st	#0,	current_pose	; Initial piece pose = 0
-; 134     47 4800_0010    	st	#0,	current_x
-; 135     48 4800_1011    	st	#16,	current_y	; Initial piece position in top of board (20 - 4)
-; 136                     
-; 137     49 4800_fa44    	st	#-6,	test_loop_i
-; 139     4a 4880_010e    	inc	current_piece
-; 140                     
-; 141     4b 8408_927d    	jsr	prep_piece_ret,	prep_piece
-; 142                     
-; 143     4c 4800_3c93    	st	#piece_stage,	render_ptr
-; 144     4d 4800_0094    	st	#0,	render_row
-; 145     4e 4800_0495    	st	#4,	render_rows
-; 146     4f 4800_0096    	st	#0,	render_col
-; 147     50 4800_0a97    	st	#10,	render_cols
-; 148                     
-; 149     51 4800_0462    	st	#4,	shift_stage_n	; Initial piece position in middle of board (10/2 - 3/2)
-; 150     52 8408_7a63    	jsr	shift_stage_ret,	shift_stage
-; 151                     
-; 152     53 8408_b99c    	jsr	render_ret,	render
+; 112     21 4800_c96a    	st	#piece_stage,	render_ptr
+; 113     22 4800_006b    	st	#0,	render_row
+; 114     23 4800_046c    	st	#4,	render_rows
+; 115     24 4800_006d    	st	#0,	render_col
+; 116     25 4800_0a6e    	st	#10,	render_cols
+; 117                     
+; 118     26 4800_0439    	st	#4,	shift_stage_n	; Initial piece position in middle of board (10/2 - 3/2)
+; 119     27 8408_513a    	jsr	shift_stage_ret,	shift_stage
+; 120                     
+; 121     28 8408_9073    	jsr	render_ret,	render
+; 122                     
+; 123     29 4800_0239    	st	#2,	shift_stage_n
+; 124     2a 8408_513a    	jsr	shift_stage_ret,	shift_stage
+; 125                     
+; 126     2b 8408_9073    	jsr	render_ret,	render
+; 127                     
+; 128     2c 4800_fa39    	st	#-6,	shift_stage_n
+; 129     2d 8408_513a    	jsr	shift_stage_ret,	shift_stage
+; 130                     
+; 131     2e 8408_9073    	jsr	render_ret,	render
+; 132                     
+; 133     2f 802a_121f    	incjne	test_loop_i,	test_loop
+; 135     30 9800_0400    	outc	newline+0
+; 136     31 9800_0500    	outc	newline+1
+; 137     32 d800_4800    	outc	#0x48		; H
+; 138     33 d800_4100    	outc	#0x41		; A
+; 139     34 d800_4c00    	outc	#0x4C		; L
+; 140     35 d800_5400    	outc	#0x54		; T
+; 141                     
+; 142     36 c810_ff00    	halt
+; 143                     
+; 144                     ; TODO
+; 145                     ; Subroutine that gets the OR'd value of the piece stage and the game board(+ row)
+; 146                     ; This is for rendering the piece, overlayed on the game board.
+; 147                     
+; 148                     ; TODO
+; 149                     ; Subroutine that checks for a collision (AND) between the piece stage and the game board(+ row)
+; 150     37              check_col_res	skip	1
+; 152     38 0800_c900    	st	piece_stage+0,	tmp
 ; 153                     
-; 154     54 4800_0262    	st	#2,	shift_stage_n
-; 155     55 8408_7a63    	jsr	shift_stage_ret,	shift_stage
-; 156                     
-; 157     56 8408_b99c    	jsr	render_ret,	render
-; 158                     
-; 159     57 4800_fa62    	st	#-6,	shift_stage_n
-; 160     58 8408_7a63    	jsr	shift_stage_ret,	shift_stage
-; 161                     
-; 162     59 8408_b99c    	jsr	render_ret,	render
+; 154                     
+; 155                     
+; 156                     ; Shift piece stage by a given number of columns
+; 157                     ; +ve column value = to the right of the gameboard = left shifting bits towards MSB
+; 158                     ; -ve column value = to the left of the gameboard = right shifting bits towards LSB
+; 159                     
+; 160     39              shift_stage_n	skip	1
+; 162     3a 0880_3910    	addto	shift_stage_n,	current_x	; Adjust current piece position	
 ; 163                     
-; 164     5a 802a_444a    	incjne	test_loop_i,	test_loop
-; 165                     
-; 166     5b 9800_0400    	outc	newline+0
-; 167     5c 9800_0500    	outc	newline+1
-; 168     5d d800_4800    	outc	#0x48		; H
-; 169     5e d800_4100    	outc	#0x41		; A
-; 170     5f d800_4c00    	outc	#0x4C		; L
-; 171     60 d800_5400    	outc	#0x54		; T
-; 172                     
-; 173     61 c810_ff00    	halt
-; 174                     
-; 175                     ; TODO
-; 176                     ; Subroutine that gets the OR'd value of the piece stage and the game board(+ row)
-; 177                     ; This is for rendering the piece, overlayed on the game board.
-; 178                     
-; 179                     ; TODO
-; 180                     ; Subroutine that checks for a collision (AND) between the piece stage and the game board(+ row)
-; 181                     
-; 182                     
-; 183                     
-; 184                     ; Shift piece stage by a given number of columns
-; 185                     ; +ve column value = to the right of the gameboard = left shifting bits towards MSB
-; 186                     ; -ve column value = to the left of the gameboard = right shifting bits towards LSB
-; 187                     
-; 188     62              shift_stage_n	skip	1
-; 190     63 0880_6210    	addto	shift_stage_n,	current_x	; Adjust current piece position	
-; 191                     
-; 192     64 0800_6200    	st	shift_stage_n,	tmp
-; 193     65 0069_0070    	jge	tmp,	ss_right
-; 195     66 0a00_3d3d    	lsr	piece_stage+1		; 0 -> bit 7. Bit 0 -> C
-; 196     67 0a10_3c3c    	ror	piece_stage+0		; C -> bit 7. Bit 0 -> C
-; 197     68 0a00_3f3f    	lsr	piece_stage+3		; 0 -> bit 7. Bit 0 -> C
-; 198     69 0a10_3e3e    	ror	piece_stage+2		; C -> bit 7. Bit 0 -> C
-; 199     6a 0a00_4141    	lsr	piece_stage+5		; 0 -> bit 7. Bit 0 -> C
-; 200     6b 0a10_4040    	ror	piece_stage+4		; C -> bit 7. Bit 0 -> C
-; 201     6c 0a00_4343    	lsr	piece_stage+7		; 0 -> bit 7. Bit 0 -> C
-; 202     6d 0a10_4242    	ror	piece_stage+6		; C -> bit 7. Bit 0 -> C
-; 203                     
-; 204     6e 802a_0066    	incjne	tmp,	ss_left
-; 205                     
-; 206     6f 4018_ff7a    	jmp	shift_stage_ret
-; 208     70 0860_0000    	neg	tmp
-; 210     71 0880_3c3c    	lsl	piece_stage+0		; 0 -> bit 0. Bit 7 -> C
-; 211     72 0890_3d3d    	rol	piece_stage+1		; C -> bit 0. Bit 7 -> C
-; 212     73 0880_3e3e    	lsl	piece_stage+2		; 0 -> bit 0. Bit 7 -> C
-; 213     74 0890_3f3f    	rol	piece_stage+3		; C -> bit 0. Bit 7 -> C
-; 214     75 0880_4040    	lsl	piece_stage+4		; 0 -> bit 0. Bit 7 -> C
-; 215     76 0890_4141    	rol	piece_stage+5		; C -> bit 0. Bit 7 -> C
-; 216     77 0880_4242    	lsl	piece_stage+6		; 0 -> bit 0. Bit 7 -> C
-; 217     78 0890_4343    	rol	piece_stage+7		; C -> bit 0. Bit 7 -> C
-; 218                     
-; 219     79 802a_0071    	incjne	tmp,	ss_right_loop
-; 220                     
-; 221     7a 4018_ff00    shift_stage_ret	jmp	0
-; 222                     
-; 223                     
-; 224                     
-; 225                     ; Prepare piece buffer
-; 226                     ; This function takes a piece number and a pose, and writes it to a buffer as 8 separate bytes,
-; 227                     ; which is in the same layout as the piece board.
-; 228                     ;
-; 229                     ; The piece is written to position (0,0), which is the bottom leftmost corner of the buffer.
-; 230                     ;
-; 231                     ; This uses current_piece and current_pose.
+; 164     3b 0800_3900    	st	shift_stage_n,	tmp
+; 165     3c 0069_3947    	jge	shift_stage_n,	ss_right
+; 167     3d 0a00_caca    	lsr	piece_stage+1		; 0 -> bit 7. Bit 0 -> C
+; 168     3e 0a10_c9c9    	ror	piece_stage+0		; C -> bit 7. Bit 0 -> C
+; 169     3f 0a00_cccc    	lsr	piece_stage+3		; 0 -> bit 7. Bit 0 -> C
+; 170     40 0a10_cbcb    	ror	piece_stage+2		; C -> bit 7. Bit 0 -> C
+; 171     41 0a00_cece    	lsr	piece_stage+5		; 0 -> bit 7. Bit 0 -> C
+; 172     42 0a10_cdcd    	ror	piece_stage+4		; C -> bit 7. Bit 0 -> C
+; 173     43 0a00_d0d0    	lsr	piece_stage+7		; 0 -> bit 7. Bit 0 -> C
+; 174     44 0a10_cfcf    	ror	piece_stage+6		; C -> bit 7. Bit 0 -> C
+; 175                     
+; 176     45 802a_003d    	incjne	tmp,	ss_left
+; 177                     
+; 178     46 4018_ff51    	jmp	shift_stage_ret
+; 180     47 0860_0000    	neg	tmp
+; 182     48 0880_c9c9    	lsl	piece_stage+0		; 0 -> bit 0. Bit 7 -> C
+; 183     49 0890_caca    	rol	piece_stage+1		; C -> bit 0. Bit 7 -> C
+; 184     4a 0880_cbcb    	lsl	piece_stage+2		; 0 -> bit 0. Bit 7 -> C
+; 185     4b 0890_cccc    	rol	piece_stage+3		; C -> bit 0. Bit 7 -> C
+; 186     4c 0880_cdcd    	lsl	piece_stage+4		; 0 -> bit 0. Bit 7 -> C
+; 187     4d 0890_cece    	rol	piece_stage+5		; C -> bit 0. Bit 7 -> C
+; 188     4e 0880_cfcf    	lsl	piece_stage+6		; 0 -> bit 0. Bit 7 -> C
+; 189     4f 0890_d0d0    	rol	piece_stage+7		; C -> bit 0. Bit 7 -> C
+; 190                     
+; 191     50 802a_0048    	incjne	tmp,	ss_right_loop
+; 192                     
+; 193     51 4018_ff00    shift_stage_ret	jmp	0
+; 194                     
+; 195                     
+; 196                     
+; 197                     ; Prepare piece buffer
+; 198                     ; This function takes a piece number and a pose, and writes it to a buffer as 8 separate bytes,
+; 199                     ; which is in the same layout as the piece board.
+; 200                     ;
+; 201                     ; The piece is written to position (0,0), which is the bottom leftmost corner of the buffer.
+; 202                     ;
+; 203                     ; This uses current_piece and current_pose.
+; 204                     
+; 205                     ; Private
+; 206     52              template_cpy	skip	1
+; 207     53              pp_tmp	skip	1
+; 210     54 4800_0657    	st	#pieces_arr,	template_ptr
+; 211     55 0880_0e57    	addto	current_piece,	template_ptr
+; 212                     
+; 214     56 4800_0052    	clr	template_cpy
+; 215     57 8080_5200    template_ptr	add	template_cpy,	0
+; 216                     
+; 218     58 4800_c991    	st	#piece_stage,	clrbuf_ptr
+; 219     59 4800_0892    	st	#8,	clrbuf_len
+; 220     5a 8408_9893    	jsr	clrbuf_ret,	clrbuf
+; 221                     
+; 225                     
+; 226     5b 4800_049a    	st	#4,	rshift_n	; Prepare right shift function to do 4 right shifts.
+; 227                     
+; 229     5c 0860_0f53    	negto	current_pose,	pp_tmp
+; 230                     
+; 231     5d 006a_5363    pp_case_0	jne	pp_tmp,	pp_case_1
 ; 232                     
-; 233                     ; Private
-; 234     7b              template_cpy	skip	1
-; 235     7c              pp_tmp	skip	1
-; 238     7d 4800_0680    	st	#pieces_arr,	template_ptr
-; 239     7e 0880_0e80    	addto	current_piece,	template_ptr
+; 234     5e 0800_52c9    	st	template_cpy,	piece_stage
+; 235     5f 4980_0fc9    	andto	#0x0F,	piece_stage
+; 237     60 0800_5299    	st	template_cpy,	rshift_val
+; 238     61 8408_9e9b    	jsr	rshift_ret,	rshift
+; 239     62 0800_99cb    	st	rshift_val,	piece_stage+2	; Next row up
 ; 240                     
-; 242     7f 4800_007b    	clr	template_cpy
-; 243     80 8080_7b00    template_ptr	add	template_cpy,	0
-; 244                     
-; 246     81 4800_3cba    	st	#piece_stage,	clrbuf_ptr
-; 247     82 4800_08bb    	st	#8,	clrbuf_len
-; 248     83 8408_c1bc    	jsr	clrbuf_ret,	clrbuf
+; 241     63 802a_5365    pp_case_1	incjne	pp_tmp,	pp_case_2
+; 242     64 4018_ff00    	jmp	0		; HALT
+; 243     65 802a_5367    pp_case_2	incjne	pp_tmp,	pp_case_3
+; 244     66 4018_ff00    	jmp	0		; HALT
+; 245     67 802a_5369    pp_case_3	incjne	pp_tmp,	pp_break
+; 246     68 4018_ff00    	jmp	0		; HALT
+; 248     69 4018_ff00    prep_piece_ret	jmp	0		; Return from subroutine
 ; 249                     
-; 253                     
-; 254     84 4800_04c3    	st	#4,	rshift_n	; Prepare right shift function to do 4 right shifts.
-; 255                     
-; 257     85 0860_0f7c    	negto	current_pose,	pp_tmp
-; 258                     
-; 259     86 006a_7c8c    pp_case_0	jne	pp_tmp,	pp_case_1
-; 260                     
-; 262     87 0800_7b3c    	st	template_cpy,	piece_stage
-; 263     88 4980_0f3c    	andto	#0x0F,	piece_stage
-; 265     89 0800_7bc2    	st	template_cpy,	rshift_val
-; 266     8a 8408_c7c4    	jsr	rshift_ret,	rshift
-; 267     8b 0800_c23e    	st	rshift_val,	piece_stage+2	; Next row up
+; 250                     ; Render buffer subroutine
+; 251                     ;
+; 252     6a              render_ptr	skip	1
+; 253     6b              render_row	skip	1
+; 254     6c              render_rows	skip	1		; Rename height?
+; 255     6d              render_col	skip	1
+; 256     6e              render_cols	skip	1		; Rename stride?
+; 257                     
+; 258     6f              render_r_rem	skip	1
+; 259     70              render_c_rem	skip	1
+; 260     71              render_tmp	skip	2
+; 266                     
+; 267     73 0800_6a7f    	st	render_ptr,	r_buf_lo
 ; 268                     
-; 269     8c 802a_7c8e    pp_case_1	incjne	pp_tmp,	pp_case_2
-; 270     8d 4018_ff00    	jmp	0		; HALT
-; 271     8e 802a_7c90    pp_case_2	incjne	pp_tmp,	pp_case_3
-; 272     8f 4018_ff00    	jmp	0		; HALT
-; 273     90 802a_7c92    pp_case_3	incjne	pp_tmp,	pp_break
-; 274     91 4018_ff00    	jmp	0		; HALT
-; 276     92 4018_ff00    prep_piece_ret	jmp	0		; Return from subroutine
+; 269     74 0800_6b00    	st	render_row,	tmp
+; 270     75 0880_0000    	lsl	tmp
+; 271     76 0880_007f    	addto	tmp,	r_buf_lo
+; 272                     
+; 273     77 0800_6c00    	st	render_rows,	tmp
+; 274     78 48e0_0100    	dec	tmp
+; 275     79 0880_0000    	lsl	tmp
+; 276     7a 0880_007f    	addto	tmp,	r_buf_lo
 ; 277                     
-; 278                     ; Render buffer subroutine
-; 279                     ;
-; 280     93              render_ptr	skip	1
-; 281     94              render_row	skip	1
-; 282     95              render_rows	skip	1		; Rename height?
-; 283     96              render_col	skip	1
-; 284     97              render_cols	skip	1		; Rename stride?
-; 285                     
-; 286     98              render_r_rem	skip	1
-; 287     99              render_c_rem	skip	1
-; 288     9a              render_tmp	skip	2
-; 294                     
-; 295     9c 0800_93a8    	st	render_ptr,	r_buf_lo
+; 278     7b 0800_7f81    	st	r_buf_lo,	r_buf_hi
+; 279     7c 4880_0181    	inc	r_buf_hi
+; 280                     
+; 282     7d 0860_6c6f    	negto	render_rows,	render_r_rem
+; 283                     
+; 285     7e 4800_0071    	clr	render_tmp+0
+; 286     7f 8080_7100    r_buf_lo	add	render_tmp+0,	0
+; 287     80 4800_0072    	clr	render_tmp+1
+; 288     81 8080_7200    r_buf_hi	add	render_tmp+1,	0
+; 289                     
+; 291     82 0860_6e70    	negto	render_cols,	render_c_rem
+; 294     83 0a00_7272    	lsr	render_tmp+1		; 0 -> bit 7. Bit 0 -> C
+; 295     84 0a10_7171    	ror	render_tmp+0		; C -> bit 7. Bit 0 -> C
 ; 296                     
-; 297     9d 0800_9400    	st	render_row,	tmp
-; 298     9e 0880_0000    	lsl	tmp
-; 299     9f 0880_00a8    	addto	tmp,	r_buf_lo
-; 300                     
-; 301     a0 0800_9500    	st	render_rows,	tmp
-; 302     a1 48e0_0100    	dec	tmp
-; 303     a2 0880_0000    	lsl	tmp
-; 304     a3 0880_00a8    	addto	tmp,	r_buf_lo
+; 297     85 0064_0088    	jcc	r_print_e		; Print empty square if C==0
+; 298     86 9800_0200    	outc	block_char		; Else print block
+; 299     87 4018_ff89    	jmp	r_after
+; 300     88 9800_0300    r_print_e	outc	empty_char
+; 302     89 d800_7c00    	outc	#0x7C ; TEST
+; 303     8a 802a_7083    	incjne	render_c_rem,	r_print_loop
 ; 305                     
-; 306     a4 0800_a8aa    	st	r_buf_lo,	r_buf_hi
-; 307     a5 4880_01aa    	inc	r_buf_hi
-; 308                     
-; 310     a6 0860_9598    	negto	render_rows,	render_r_rem
-; 311                     
-; 313     a7 4800_009a    	clr	render_tmp+0
-; 314     a8 8080_9a00    r_buf_lo	add	render_tmp+0,	0
-; 315     a9 4800_009b    	clr	render_tmp+1
-; 316     aa 8080_9b00    r_buf_hi	add	render_tmp+1,	0
+; 308     8b 9800_0400    	outc	newline+0
+; 309     8c 9800_0500    	outc	newline+1
+; 310                     
+; 311     8d 48e0_027f    	rsbto	#2,	r_buf_lo	; Subtract 2 from each pointer
+; 312     8e 48e0_0281    	rsbto	#2,	r_buf_hi
+; 313     8f 802a_6f7e    	incjne	render_r_rem,	r_loop
+; 315                     
+; 316     90 4018_ff00    render_ret	jmp	0
 ; 317                     
-; 319     ab 0860_9799    	negto	render_cols,	render_c_rem
-; 322     ac 0a00_9b9b    	lsr	render_tmp+1		; 0 -> bit 7. Bit 0 -> C
-; 323     ad 0a10_9a9a    	ror	render_tmp+0		; C -> bit 7. Bit 0 -> C
-; 324                     
-; 325     ae 0064_00b1    	jcc	r_print_e		; Print empty square if C==0
-; 326     af 9800_0200    	outc	block_char		; Else print block
-; 327     b0 4018_ffb2    	jmp	r_after
-; 328     b1 9800_0300    r_print_e	outc	empty_char
-; 330     b2 d800_7c00    	outc	#0x7C ; TEST
-; 331     b3 802a_99ac    	incjne	render_c_rem,	r_print_loop
-; 333                     
-; 336     b4 9800_0400    	outc	newline+0
-; 337     b5 9800_0500    	outc	newline+1
-; 338                     
-; 339     b6 48e0_02a8    	rsbto	#2,	r_buf_lo	; Subtract 2 from each pointer
-; 340     b7 48e0_02aa    	rsbto	#2,	r_buf_hi
-; 341     b8 802a_98a7    	incjne	render_r_rem,	r_loop
-; 343                     
-; 344     b9 4018_ff00    render_ret	jmp	0
-; 345                     
-; 346                     ; Clear buffer subroutine
+; 318                     ; Clear buffer subroutine
+; 319                     ;
+; 320     91              clrbuf_ptr	skip	1
+; 321     92              clrbuf_len	skip	1
+; 323     93 0860_9200    	negto	clrbuf_len,	tmp
+; 324     94 0800_9195    	st	clrbuf_ptr,	clrbuf_clr
+; 326     95 4800_0000    clrbuf_clr	clr	0		; Indirect clear
+; 327     96 4880_0195    	inc	clrbuf_clr
+; 328     97 802a_0095    	incjne	tmp,	clrbuf_loop
+; 329     98 4018_ff00    clrbuf_ret	jmp	0
+; 330                     
+; 331                     ; Right shift subroutine
+; 332                     ;
+; 333     99              rshift_val	skip	1
+; 334     9a              rshift_n	skip	1
+; 335     9b 0860_9a00    rshift	negto	rshift_n,	tmp
+; 336     9c 0a00_9999    rshift_loop	lsr	rshift_val
+; 337     9d 802a_009c    	incjne	tmp,	rshift_loop
+; 338     9e 4018_ff00    rshift_ret	jmp	0		; Return from subroutine
+; 339                     
+; 340                     ; GAME BOARD
+; 341                     ;
+; 342                     ; Left of board is X = 1; right is X = 10
+; 343                     ; Bottom of board is Y = 0, top is Y = 19
+; 344                     ;
+; 345                     ; There is a wall at X = 0 and X = 11
+; 346                     ; There is a wall at Y = -1
 ; 347                     ;
-; 348     ba              clrbuf_ptr	skip	1
-; 349     bb              clrbuf_len	skip	1
-; 351     bc 0860_bb00    	negto	clrbuf_len,	tmp
-; 352     bd 0800_babe    	st	clrbuf_ptr,	clrbuf_clr
-; 354     be 4800_0000    clrbuf_clr	clr	0		; Indirect clear
-; 355     bf 4880_01be    	inc	clrbuf_clr
-; 356     c0 802a_00be    	incjne	tmp,	clrbuf_loop
-; 357     c1 4018_ff00    clrbuf_ret	jmp	0
-; 358                     
-; 359                     ; Right shift subroutine
-; 360                     ;
-; 361     c2              rshift_val	skip	1
-; 362     c3              rshift_n	skip	1
-; 363     c4 0860_c300    rshift	negto	rshift_n,	tmp
-; 364     c5 0a00_c2c2    rshift_loop	lsr	rshift_val
-; 365     c6 802a_00c5    	incjne	tmp,	rshift_loop
-; 366     c7 4018_ff00    rshift_ret	jmp	0		; Return from subroutine
-; 367                     
+; 348                     ; The game board is made up of 20 rows, of 10 columns each.
+; 349                     ; Each row is represented by 2 bytes (16 bits).
+; 350                     ; 2 bits represent the walls and are always set to 1.
+; 351                     ; 4 additional bits are wasted at the MSB end of the odd bytes.
+; 352                     ;
+; 353                     ; The left wall is the LSB of the lower byte. The right wall is the 4th bit of the upper byte.
+; 354                     ; The left of the board is bit 1 of the lower byte. The right of the board is bit 3 of the higher byte.
+; 355                     ; The lowermost row is row Y=0, and is represented by bytes 0 (left) and 1 (right).
+; 356                     ; The uppermost row is row Y=19, and is represented by bytes 38 (left) and 39 (right).
+; 357                     ;
+; 358                     ; BOARD LAYOUT:
+; 359                     ;
+; 360                     ; ...
+; 361                     ; Row Y=3 : Byte 6 --> [ W 1234567 | 89A W XXXX ] <-- Byte 7
+; 362                     ; Row Y=2 : Byte 4 --> [ W 1234567 | 89A W XXXX ] <-- Byte 5
+; 363                     ; Row Y=1 : Byte 2 --> [ W 1234567 | 89A W XXXX ] <-- Byte 3
+; 364                     ; Row Y=0 : Byte 0 --> [ W 1234567 | 89A W XXXX ] <-- Byte 1
+; 365                     ;
+; 366                     ; ROW LAYOUT:
+; 367                     ;
+; 368                     ;	LEFT            RIGHT
+; 369                     ; X:	W 1 2 3 4 5 6 7   8 9 A W X X X X
+; 370                     ;	- - - - - - - -   - - - - - - - -
+; 371                     ; Bit:	0 1 2 3 4 5 6 7 | 0 1 2 3 4 5 6 7
+; 372                     ;	^ LSB     MSB ^ | ^ LSB     MSB ^
+; 373                     ; Byte:	0               | 1
+; 374                     ;
+; 375     9f c810_ffff    	data	0xFF	; Provide a solid boarder "below" the gameboard, at Y=-1.
+; 376     a0 c810_ffff    	data	0xFF	; This simplifies collision detection.
+; 377                     ; gameboard	skip	40
+; 379     a1 c810_ff01    	data	0x01
+; 380     a2 c810_ff08    	data	0x08
+; 381     a3 c810_ff01    	data	0x01
+; 382     a4 c810_ff08    	data	0x08
+; 383     a5 c810_ff01    	data	0x01
+; 384     a6 c810_ff08    	data	0x08
+; 385     a7 c810_ff01    	data	0x01
+; 386     a8 c810_ff08    	data	0x08
+; 387     a9 c810_ff01    	data	0x01
+; 388     aa c810_ff08    	data	0x08
+; 389     ab c810_ff01    	data	0x01
+; 390     ac c810_ff08    	data	0x08
+; 391     ad c810_ff01    	data	0x01
+; 392     ae c810_ff08    	data	0x08
+; 393     af c810_ff01    	data	0x01
+; 394     b0 c810_ff08    	data	0x08
+; 395     b1 c810_ff01    	data	0x01
+; 396     b2 c810_ff08    	data	0x08
+; 397     b3 c810_ff01    	data	0x01
+; 398     b4 c810_ff08    	data	0x08
+; 399     b5 c810_ff01    	data	0x01
+; 400     b6 c810_ff08    	data	0x08
+; 401     b7 c810_ff01    	data	0x01
+; 402     b8 c810_ff08    	data	0x08
+; 403     b9 c810_ff01    	data	0x01
+; 404     ba c810_ff08    	data	0x08
+; 405     bb c810_ff01    	data	0x01
+; 406     bc c810_ff08    	data	0x08
+; 407     bd c810_ff01    	data	0x01
+; 408     be c810_ff08    	data	0x08
+; 409     bf c810_ff01    	data	0x01
+; 410     c0 c810_ff08    	data	0x08
+; 411     c1 c810_ff01    	data	0x01
+; 412     c2 c810_ff08    	data	0x08
+; 413     c3 c810_ff01    	data	0x01
+; 414     c4 c810_ff08    	data	0x08
+; 415     c5 c810_ff01    	data	0x01
+; 416     c6 c810_ff08    	data	0x08
+; 417     c7 c810_ff01    	data	0x01
+; 418     c8 c810_ff08    	data	0x08
+; 419                     
+; 420                     
+; 421                     
+; 422                     ; Piece staging buffer.
+; 423                     ; This buffer contains the current piece in the selected pose, in the same format as the game board.
+; 424                     ; It is 4 rows high, each row is 2 bytes, just like the game board.
+; 425                     ; This allows easy left/right movement of the piece (simple bitwise rotation of each row left or right),
+; 426                     ; and easy updating of, or collision checking with, the game board (with bitwise operations).
+; 427     c9              piece_stage	skip	8
 
 ; 0 errors detected in pass 2
 
 ; Symbol table:
 ; block_char = 0x2
-; clrbuf = 0xbc
-; clrbuf_clr = 0xbe
-; clrbuf_len = 0xbb
-; clrbuf_loop = 0xbe
-; clrbuf_ptr = 0xba
-; clrbuf_ret = 0xc1
+; check_col = 0x38
+; check_col_res = 0x37
+; clrbuf = 0x93
+; clrbuf_clr = 0x95
+; clrbuf_len = 0x92
+; clrbuf_loop = 0x95
+; clrbuf_ptr = 0x91
+; clrbuf_ret = 0x98
 ; current_cleared = 0xd
 ; current_piece = 0xe
 ; current_pose = 0xf
@@ -347,82 +408,89 @@
 ; current_y = 0x11
 ; empty_char = 0x3
 ; exec = 0x1
-; gameboard = 0x14
+; gameboard = 0xa1
+; halt_prog = 0x30
 ; i_piece = 0xc
 ; j_piece = 0xa
 ; l_piece = 0x9
 ; newline = 0x4
 ; o_piece = 0xb
-; piece_stage = 0x3c
+; piece_stage = 0xc9
 ; pieces_arr = 0x6
-; pp_break = 0x92
-; pp_case_0 = 0x86
-; pp_case_1 = 0x8c
-; pp_case_2 = 0x8e
-; pp_case_3 = 0x90
-; pp_tmp = 0x7c
-; prep_piece = 0x7d
-; prep_piece_ret = 0x92
-; r_after = 0xb2
-; r_buf_hi = 0xaa
-; r_buf_lo = 0xa8
-; r_loop = 0xa7
-; r_loop_end = 0xb9
-; r_print_e = 0xb1
-; r_print_loop = 0xac
-; render = 0x9c
-; render_c_rem = 0x99
-; render_col = 0x96
-; render_cols = 0x97
-; render_ptr = 0x93
-; render_r_rem = 0x98
-; render_ret = 0xb9
-; render_row = 0x94
-; render_rows = 0x95
-; render_tmp = 0x9a
-; rshift = 0xc4
-; rshift_loop = 0xc5
-; rshift_n = 0xc3
-; rshift_ret = 0xc7
-; rshift_val = 0xc2
-; run = 0x45
+; pp_break = 0x69
+; pp_case_0 = 0x5d
+; pp_case_1 = 0x63
+; pp_case_2 = 0x65
+; pp_case_3 = 0x67
+; pp_tmp = 0x53
+; prep_piece = 0x54
+; prep_piece_ret = 0x69
+; r_after = 0x89
+; r_buf_hi = 0x81
+; r_buf_lo = 0x7f
+; r_loop = 0x7e
+; r_loop_end = 0x90
+; r_print_e = 0x88
+; r_print_loop = 0x83
+; render = 0x73
+; render_c_rem = 0x70
+; render_col = 0x6d
+; render_cols = 0x6e
+; render_ptr = 0x6a
+; render_r_rem = 0x6f
+; render_ret = 0x90
+; render_row = 0x6b
+; render_rows = 0x6c
+; render_tmp = 0x71
+; rshift = 0x9b
+; rshift_loop = 0x9c
+; rshift_n = 0x9a
+; rshift_ret = 0x9e
+; rshift_val = 0x99
+; run = 0x13
 ; s_piece = 0x7
-; shift_stage = 0x63
-; shift_stage_n = 0x62
-; shift_stage_ret = 0x7a
-; ss_left = 0x66
-; ss_right = 0x70
-; ss_right_loop = 0x71
+; shift_stage = 0x3a
+; shift_stage_n = 0x39
+; shift_stage_ret = 0x51
+; ss_left = 0x3d
+; ss_right = 0x47
+; ss_right_loop = 0x48
 ; t_piece = 0x6
-; template_cpy = 0x7b
-; template_ptr = 0x80
-; test_loop = 0x4a
-; test_loop_i = 0x44
+; template_cpy = 0x52
+; template_ptr = 0x57
+; test_loop = 0x1f
+; test_loop_i = 0x12
 ; tmp = 0x0
 ; z_piece = 0x8
 
 ; Memory image:
-00: c810ff00 4018ff45 c810ff23 c810ff20 c810ff0d c810ff0a c810ff72 c810ff63
+00: c810ff00 4018ff13 c810ff23 c810ff20 c810ff0d c810ff0a c810ff72 c810ff63
 08: c810ff36 c810ff47 c810ff74 c810ff66 c810fff0
-12: c810ffff c810ffff
-45: 4800000e 4800000f 48000010
-48: 48001011 4800fa44 4880010e 8408927d 48003c93 48000094 48000495 48000096
-50: 48000a97 48000462 84087a63 8408b99c 48000262 84087a63 8408b99c 4800fa62
-58: 84087a63 8408b99c 802a444a 98000400 98000500 d8004800 d8004100 d8004c00
-60: d8005400 c810ff00
-63: 08806210 08006200 00690070 0a003d3d 0a103c3c
-68: 0a003f3f 0a103e3e 0a004141 0a104040 0a004343 0a104242 802a0066 4018ff7a
-70: 08600000 08803c3c 08903d3d 08803e3e 08903f3f 08804040 08904141 08804242
-78: 08904343 802a0071 4018ff00
-7d: 48000680 08800e80 4800007b
-80: 80807b00 48003cba 480008bb 8408c1bc 480004c3 08600f7c 006a7c8c 08007b3c
-88: 49800f3c 08007bc2 8408c7c4 0800c23e 802a7c8e 4018ff00 802a7c90 4018ff00
-90: 802a7c92 4018ff00 4018ff00
-9c: 080093a8 08009400 08800000 088000a8
-a0: 08009500 48e00100 08800000 088000a8 0800a8aa 488001aa 08609598 4800009a
-a8: 80809a00 4800009b 80809b00 08609799 0a009b9b 0a109a9a 006400b1 98000200
-b0: 4018ffb2 98000300 d8007c00 802a99ac 98000400 98000500 48e002a8 48e002aa
-b8: 802a98a7 4018ff00
-bc: 0860bb00 0800babe 48000000 488001be
-c0: 802a00be 4018ff00
-c4: 0860c300 0a00c2c2 802a00c5 4018ff00
+13: 48009f6a 4800006b 4800156c 4800006d 48000c6e
+18: 84089073 4018ff30 4800000e 4800000f 48000010 48001011 4800fa12 4880010e
+20: 84086954 4800c96a 4800006b 4800046c 4800006d 48000a6e 48000439 8408513a
+28: 84089073 48000239 8408513a 84089073 4800fa39 8408513a 84089073 802a121f
+30: 98000400 98000500 d8004800 d8004100 d8004c00 d8005400 c810ff00
+38: 0800c900
+3a: 08803910 08003900 00693947 0a00caca 0a10c9c9 0a00cccc
+40: 0a10cbcb 0a00cece 0a10cdcd 0a00d0d0 0a10cfcf 802a003d 4018ff51 08600000
+48: 0880c9c9 0890caca 0880cbcb 0890cccc 0880cdcd 0890cece 0880cfcf 0890d0d0
+50: 802a0048 4018ff00
+54: 48000657 08800e57 48000052 80805200
+58: 4800c991 48000892 84089893 4800049a 08600f53 006a5363 080052c9 49800fc9
+60: 08005299 84089e9b 080099cb 802a5365 4018ff00 802a5367 4018ff00 802a5369
+68: 4018ff00 4018ff00
+73: 08006a7f 08006b00 08800000 0880007f 08006c00
+78: 48e00100 08800000 0880007f 08007f81 48800181 08606c6f 48000071 80807100
+80: 48000072 80807200 08606e70 0a007272 0a107171 00640088 98000200 4018ff89
+88: 98000300 d8007c00 802a7083 98000400 98000500 48e0027f 48e00281 802a6f7e
+90: 4018ff00
+93: 08609200 08009195 48000000 48800195 802a0095
+98: 4018ff00
+9b: 08609a00 0a009999 802a009c 4018ff00 c810ffff
+a0: c810ffff c810ff01 c810ff08 c810ff01 c810ff08 c810ff01 c810ff08 c810ff01
+a8: c810ff08 c810ff01 c810ff08 c810ff01 c810ff08 c810ff01 c810ff08 c810ff01
+b0: c810ff08 c810ff01 c810ff08 c810ff01 c810ff08 c810ff01 c810ff08 c810ff01
+b8: c810ff08 c810ff01 c810ff08 c810ff01 c810ff08 c810ff01 c810ff08 c810ff01
+c0: c810ff08 c810ff01 c810ff08 c810ff01 c810ff08 c810ff01 c810ff08 c810ff01
+c8: c810ff08

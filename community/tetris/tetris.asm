@@ -35,7 +35,7 @@ newline	data	0x0D	; Carriage Return CR \r
 ; left to right RSB to LSB,	so take care.
 ;
 
-pieces_arr ; Can access the pieces list with pieces+n,	n in [0,	6]
+pieces_arr
 
 ; Real | Bits | Hex
 ;
@@ -69,7 +69,7 @@ i_piece	data	0xF0
 
 
 
-; Game state - TODO: Put this at the end of memory,	> 127,	to save EEPROM programmable space.
+; Game state
 ;
 current_cleared	skip	1
 
@@ -78,51 +78,20 @@ current_pose	skip	1
 current_x	skip	1
 current_y	skip	1
 
-; GAME BOARD
-;
-; Left of board is X = 0; right is X = 9
-; Bottom of board is Y = 0, top is Y = 19
-;
-; The game board is made up of 20 rows, of 10 columns each.
-; Each row is represented by two bytes (16 bits) - 6 bits are wasted on the odd bytes.
-; The left of the board is the LSB of the lower byte,	the right of the board is the 2nd bit of the upper byte.
-; The lowermost row is row Y=0, and is represented by bytes 0 (left) and 1 (right).
-; The uppermost row is row Y=19, and is represented by bytes 38 (left) and 39 (right). 
-;
-; BOARD LAYOUT:
-;
-; Row Y=3 : Byte 6 --> [ 01234567 | 89 XXXXXX ] <-- Byte 7
-; Row Y=2 : Byte 4 --> [ 01234567 | 89 XXXXXX ] <-- Byte 5
-; Row Y=1 : Byte 2 --> [ 01234567 | 89 XXXXXX ] <-- Byte 3
-; Row Y=0 : Byte 0 --> [ 01234567 | 89 XXXXXX ] <-- Byte 1
-;
-; ROW LAYOUT:
-;
-;	LEFT            RIGHT
-; X:	0 1 2 3 4 5 6 7   8 9
-;	- - - - - - - -   - -
-; Bit:	0 1 2 3 4 5 6 7 | 0 1
-;	^ LSB     MSB ^ | ^ LSB
-; Byte:	0               | 1
-;
-	data	0xFF ; Provide a solid boarder "below" the gameboard, at Y=-1.
-	data	0xFF ; This simplifies collision detection.
-gameboard	skip	40
 
-
-; Piece staging buffer.
-; This buffer contains the current piece in the selected pose, in the same format as the game board.
-; It is 4 rows high, each row is 2 bytes, just like the game board.
-; This allows easy left/right movement of the piece (simple bitwise rotation of each row left or right),
-; and easy updating of, or collision checking with, the game board (with bitwise operations).
-piece_stage	skip	8
 
 ; Start of application code
 ;
 test_loop_i	skip	1
 run
-	; TODO
-	; Write boarders to game board (simplifies collision detection)
+	st	#gameboard-2,	render_ptr
+	st	#0,	render_row
+	st	#21,	render_rows
+	st	#0,	render_col
+	st	#12,	render_cols
+
+	jsr	render_ret,	render
+	jmp	halt_prog
 
 	; TODO
 	; Test loop:
@@ -162,7 +131,7 @@ test_loop
 	jsr	render_ret,	render
 
 	incjne	test_loop_i,	test_loop
-
+halt_prog
 	outc	newline+0
 	outc	newline+1
 	outc	#0x48		; H
@@ -178,6 +147,9 @@ test_loop
 
 ; TODO
 ; Subroutine that checks for a collision (AND) between the piece stage and the game board(+ row)
+check_col_res	skip	1
+check_col
+	st	piece_stage+0,	tmp
 
 
 
@@ -190,7 +162,7 @@ shift_stage
 	addto	shift_stage_n,	current_x	; Adjust current piece position	
 
 	st	shift_stage_n,	tmp
-	jge	tmp,	ss_right
+	jge	shift_stage_n,	ss_right
 ss_left
 	lsr	piece_stage+1		; 0 -> bit 7. Bit 0 -> C
 	ror	piece_stage+0		; C -> bit 7. Bit 0 -> C
@@ -365,3 +337,91 @@ rshift_loop	lsr	rshift_val
 	incjne	tmp,	rshift_loop
 rshift_ret	jmp	0		; Return from subroutine
 
+; GAME BOARD
+;
+; Left of board is X = 1; right is X = 10
+; Bottom of board is Y = 0, top is Y = 19
+;
+; There is a wall at X = 0 and X = 11
+; There is a wall at Y = -1
+;
+; The game board is made up of 20 rows, of 10 columns each.
+; Each row is represented by 2 bytes (16 bits).
+; 2 bits represent the walls and are always set to 1.
+; 4 additional bits are wasted at the MSB end of the odd bytes.
+;
+; The left wall is the LSB of the lower byte. The right wall is the 4th bit of the upper byte.
+; The left of the board is bit 1 of the lower byte. The right of the board is bit 3 of the higher byte.
+; The lowermost row is row Y=0, and is represented by bytes 0 (left) and 1 (right).
+; The uppermost row is row Y=19, and is represented by bytes 38 (left) and 39 (right).
+;
+; BOARD LAYOUT:
+;
+; ...
+; Row Y=3 : Byte 6 --> [ W 1234567 | 89A W XXXX ] <-- Byte 7
+; Row Y=2 : Byte 4 --> [ W 1234567 | 89A W XXXX ] <-- Byte 5
+; Row Y=1 : Byte 2 --> [ W 1234567 | 89A W XXXX ] <-- Byte 3
+; Row Y=0 : Byte 0 --> [ W 1234567 | 89A W XXXX ] <-- Byte 1
+;
+; ROW LAYOUT:
+;
+;	LEFT            RIGHT
+; X:	W 1 2 3 4 5 6 7   8 9 A W X X X X
+;	- - - - - - - -   - - - - - - - -
+; Bit:	0 1 2 3 4 5 6 7 | 0 1 2 3 4 5 6 7
+;	^ LSB     MSB ^ | ^ LSB     MSB ^
+; Byte:	0               | 1
+;
+	data	0xFF	; Provide a solid boarder "below" the gameboard, at Y=-1.
+	data	0xFF	; This simplifies collision detection.
+; gameboard	skip	40
+gameboard			; Solid boarder along left and right edge of board
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+	data	0x01
+	data	0x08
+
+
+
+; Piece staging buffer.
+; This buffer contains the current piece in the selected pose, in the same format as the game board.
+; It is 4 rows high, each row is 2 bytes, just like the game board.
+; This allows easy left/right movement of the piece (simple bitwise rotation of each row left or right),
+; and easy updating of, or collision checking with, the game board (with bitwise operations).
+piece_stage	skip	8
