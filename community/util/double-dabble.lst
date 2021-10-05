@@ -1,88 +1,88 @@
-Pass 1...
+; Pass 1...
 
-0 errors detected in pass 1
+; 0 errors detected in pass 1
 
-Pass 2...
-1                       ; Double Dabble
-2                       ; Ryan Crosby 2018
-3                       ;
-4                       ; The double dabble algorithm converts a binary/hex number into decimal BCD.
-5                       ;
-6       00              	org	0x00
-7       00 c810_fff3    test_ddabble_num	data	243	; Test number
-8       01              test_ddabble_tmp	skip	1	; Scratch space for ASCII calculation
-9       10              	org	0x10
-10      10 0800_0025    test_ddabble	st	test_ddabble_num, ddabble_n
-11      11 8408_4730    	jsr	ddabble_ret, ddabble	; Run Double Dabble algorithm on n
-12      12 0800_2701    	st	ddabble_2, test_ddabble_tmp	; Hundreds digit is in lower nubble of 2
-13      13 4880_3001    	addto	#0x30, test_ddabble_tmp	; Convert into ASCII by adding '0'
-14      14 9800_0100    	outc	test_ddabble_tmp	; Print hundreds digit
-15      15 0800_2601    	st	ddabble_01, test_ddabble_tmp	; Tens digit is in upper nibble of 01
-16      16 0a00_0101    	lsr	test_ddabble_tmp	; Shift tens digit into lower nibble (also removes ones digit)
-17      17 0a00_0101    	lsr	test_ddabble_tmp
-18      18 0a00_0101    	lsr	test_ddabble_tmp
-19      19 0a00_0101    	lsr	test_ddabble_tmp
-20      1a 4880_3001    	addto	#0x30, test_ddabble_tmp	; Convert into ASCII by adding '0'
-21      1b 9800_0100    	outc	test_ddabble_tmp	; Print tens digit
-22      1c 0800_2601    	st	ddabble_01, test_ddabble_tmp     ; Ones digit is in lower nibble of 01
-23      1d 4980_0f01    	andto	#0x0F, test_ddabble_tmp	; Mask out 10s digit
-24      1e 4880_3001    	addto	#0x30, test_ddabble_tmp	; Convert into ASCII by adding '0'
-25      1f 9800_0100    	outc	test_ddabble_tmp	; Print ones digit
-26      20 c810_ff00    	halt
-27                      
-28                      ; Convert hex number to decimal by Double Dabble algorithm
-29                      ;
-30      25              	org	0x25
-31      25              ddabble_n	skip	1	; The binary number to convert. This argument is destroyed.
-32      26              ddabble_01	skip	1	; The first decimal digit (ones digit), lower nibble, and the second decimal digit (tens digit), upper nibble.
-33      27              ddabble_2	skip	1	; The third decimal digit (hundreds digit), lower nibble.
-34      28              ddabble_i	skip	1	; Interation counter
-35      29              ddabble_tmp	skip	1	; Scratch space
-36      30              	org	0x30
-37      30 4800_0026    ddabble	clr	ddabble_01	; Subroutine start.
-38      31 4800_0027    	clr	ddabble_2
-39      32 4800_f828    	st	#-8, ddabble_i	; Run the loop 8 times for an 8 bit input.
-40      33 0062_2738    ddabble_c2	jeq	ddabble_2, ddabble_c1	; Optimisation. If digit 2 is zero, don't need to check it.
-41      34 0800_2729    	st	ddabble_2, ddabble_tmp
-42      35 48e0_0429    	rsbto	#0x04, ddabble_tmp
-43      36 0066_2938    	jls	ddabble_tmp, ddabble_c1
-44      37 4880_0327    	addto	#0x03, ddabble_2
-45      38 0062_2643    ddabble_c1	jeq	ddabble_01, ddabble_r	; Optimisation. If digits 0 and 1 are both zero, don't need to check them.
-46      39 0800_2629    	st	ddabble_01, ddabble_tmp
-47      3a 4980_f029    	andto	#0xF0, ddabble_tmp	; Mask off upper nibble (digit 1)
-48      3b 48e0_4029    	rsbto	#0x40, ddabble_tmp
-49      3c 0066_293e    	jls	ddabble_tmp, ddabble_c0
-50      3d 4880_3026    	addto	#0x30, ddabble_01
-51      3e 0800_2629    ddabble_c0	st	ddabble_01, ddabble_tmp
-52      3f 4980_0f29    	andto	#0x0F, ddabble_tmp	; Mask off lower nibble (digit 0)
-53      40 48e0_0429    	rsbto	#0x04, ddabble_tmp
-54      41 0066_2943    	jls	ddabble_tmp, ddabble_r
-55      42 4880_0326    	addto	#0x03, ddabble_01
-56      43 0880_2525    ddabble_r	lsl	ddabble_n	; Left rotate all data by 1 bit
-57      44 0890_2626    	rol	ddabble_01
-58      45 0890_2727    	rol	ddabble_2
-59      46 802a_2833    	incjne	ddabble_i, ddabble_c2	; Loop.
-60      47 4018_ff00    ddabble_ret	jmp	0	; Return subroutine.
+; Pass 2...
+; 1                       ; Double Dabble
+; 2                       ; Ryan Crosby 2018
+; 3                       ;
+; 4                       ; The double dabble algorithm converts a binary/hex number into decimal BCD.
+; 5                       ;
+; 6       00              	org	0x00
+; 7       00 c810_fff3    test_ddabble_num	data	243	; Test number
+; 8       01              test_ddabble_tmp	skip	1	; Scratch space for ASCII calculation
+; 9       10              	org	0x10
+; 10      10 0800_0025    test_ddabble	st	test_ddabble_num, ddabble_n
+; 11      11 8408_4730    	jsr	ddabble_ret, ddabble	; Run Double Dabble algorithm on n
+; 12      12 0800_2701    	st	ddabble_2, test_ddabble_tmp	; Hundreds digit is in lower nubble of 2
+; 13      13 4880_3001    	addto	#0x30, test_ddabble_tmp	; Convert into ASCII by adding '0'
+; 14      14 9800_0100    	outc	test_ddabble_tmp	; Print hundreds digit
+; 15      15 0800_2601    	st	ddabble_01, test_ddabble_tmp	; Tens digit is in upper nibble of 01
+; 16      16 0a00_0101    	lsr	test_ddabble_tmp	; Shift tens digit into lower nibble (also removes ones digit)
+; 17      17 0a00_0101    	lsr	test_ddabble_tmp
+; 18      18 0a00_0101    	lsr	test_ddabble_tmp
+; 19      19 0a00_0101    	lsr	test_ddabble_tmp
+; 20      1a 4880_3001    	addto	#0x30, test_ddabble_tmp	; Convert into ASCII by adding '0'
+; 21      1b 9800_0100    	outc	test_ddabble_tmp	; Print tens digit
+; 22      1c 0800_2601    	st	ddabble_01, test_ddabble_tmp     ; Ones digit is in lower nibble of 01
+; 23      1d 4980_0f01    	andto	#0x0F, test_ddabble_tmp	; Mask out 10s digit
+; 24      1e 4880_3001    	addto	#0x30, test_ddabble_tmp	; Convert into ASCII by adding '0'
+; 25      1f 9800_0100    	outc	test_ddabble_tmp	; Print ones digit
+; 26      20 c810_ff00    	halt
+; 27                      
+; 28                      ; Convert hex number to decimal by Double Dabble algorithm
+; 29                      ;
+; 30      25              	org	0x25
+; 31      25              ddabble_n	skip	1	; The binary number to convert. This argument is destroyed.
+; 32      26              ddabble_01	skip	1	; The first decimal digit (ones digit), lower nibble, and the second decimal digit (tens digit), upper nibble.
+; 33      27              ddabble_2	skip	1	; The third decimal digit (hundreds digit), lower nibble.
+; 34      28              ddabble_i	skip	1	; Interation counter
+; 35      29              ddabble_tmp	skip	1	; Scratch space
+; 36      30              	org	0x30
+; 37      30 4800_0026    ddabble	clr	ddabble_01	; Subroutine start.
+; 38      31 4800_0027    	clr	ddabble_2
+; 39      32 4800_f828    	st	#-8, ddabble_i	; Run the loop 8 times for an 8 bit input.
+; 40      33 0062_2738    ddabble_c2	jeq	ddabble_2, ddabble_c1	; Optimisation. If digit 2 is zero, don't need to check it.
+; 41      34 0800_2729    	st	ddabble_2, ddabble_tmp
+; 42      35 48e0_0429    	rsbto	#0x04, ddabble_tmp
+; 43      36 0066_2938    	jls	ddabble_tmp, ddabble_c1
+; 44      37 4880_0327    	addto	#0x03, ddabble_2
+; 45      38 0062_2643    ddabble_c1	jeq	ddabble_01, ddabble_r	; Optimisation. If digits 0 and 1 are both zero, don't need to check them.
+; 46      39 0800_2629    	st	ddabble_01, ddabble_tmp
+; 47      3a 4980_f029    	andto	#0xF0, ddabble_tmp	; Mask off upper nibble (digit 1)
+; 48      3b 48e0_4029    	rsbto	#0x40, ddabble_tmp
+; 49      3c 0066_293e    	jls	ddabble_tmp, ddabble_c0
+; 50      3d 4880_3026    	addto	#0x30, ddabble_01
+; 51      3e 0800_2629    ddabble_c0	st	ddabble_01, ddabble_tmp
+; 52      3f 4980_0f29    	andto	#0x0F, ddabble_tmp	; Mask off lower nibble (digit 0)
+; 53      40 48e0_0429    	rsbto	#0x04, ddabble_tmp
+; 54      41 0066_2943    	jls	ddabble_tmp, ddabble_r
+; 55      42 4880_0326    	addto	#0x03, ddabble_01
+; 56      43 0880_2525    ddabble_r	lsl	ddabble_n	; Left rotate all data by 1 bit
+; 57      44 0890_2626    	rol	ddabble_01
+; 58      45 0890_2727    	rol	ddabble_2
+; 59      46 802a_2833    	incjne	ddabble_i, ddabble_c2	; Loop.
+; 60      47 4018_ff00    ddabble_ret	jmp	0	; Return subroutine.
 
-0 errors detected in pass 2
+; 0 errors detected in pass 2
 
-Symbol table:
-ddabble = 0x30
-ddabble_01 = 0x26
-ddabble_2 = 0x27
-ddabble_c0 = 0x3e
-ddabble_c1 = 0x38
-ddabble_c2 = 0x33
-ddabble_i = 0x28
-ddabble_n = 0x25
-ddabble_r = 0x43
-ddabble_ret = 0x47
-ddabble_tmp = 0x29
-test_ddabble = 0x10
-test_ddabble_num = 0x0
-test_ddabble_tmp = 0x1
+; Symbol table:
+; ddabble = 0x30
+; ddabble_01 = 0x26
+; ddabble_2 = 0x27
+; ddabble_c0 = 0x3e
+; ddabble_c1 = 0x38
+; ddabble_c2 = 0x33
+; ddabble_i = 0x28
+; ddabble_n = 0x25
+; ddabble_r = 0x43
+; ddabble_ret = 0x47
+; ddabble_tmp = 0x29
+; test_ddabble = 0x10
+; test_ddabble_num = 0x0
+; test_ddabble_tmp = 0x1
 
-Memory image:
+; Memory image:
 00: c810fff3
 10: 08000025 84084730 08002701 48803001 98000100 08002601 0a000101 0a000101
 18: 0a000101 0a000101 48803001 98000100 08002601 49800f01 48803001 98000100
