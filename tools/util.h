@@ -41,7 +41,7 @@ struct symbol {
 
 struct symbol *find_symbol(char *name);
 void set_symbol(struct symbol *sy, unsigned long long val);
-void show_syms(void);
+void show_syms();
 
 int to_hex_digit(unsigned int x);
 char *hex8(unsigned long x);
@@ -51,10 +51,14 @@ char *hex2(unsigned int x);
 /* Print hex nicely */
 char *phex(int width, unsigned long val);
 
+/* Enable commented line during output */
+extern int comment_on;
+#define output(...) (void)(comment_on && printf("; ")), printf(__VA_ARGS__)
+
 /* Error printer */
 extern int line;
 extern char *file;
 extern int ecount;
-#define error0(s) ++ecount, printf("%s:%d: error: " s "\n", file, line)
-#define error1(s, a) ++ecount, printf("%s:%d: error: " s "\n", file, line, (a))
-#define error2(s, a, b) ++ecount, printf("%s:%d: error: " s "\n", file, line, (a), (b))
+#define error0(s) ++ecount, output("%s:%d: error: " s "\n", file, line)
+#define error1(s, a) ++ecount, output("%s:%d: error: " s "\n", file, line, (a))
+#define error2(s, a, b) ++ecount, output("%s:%d: error: " s "\n", file, line, (a), (b))
