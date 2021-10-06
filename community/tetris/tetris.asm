@@ -6,9 +6,54 @@
 ; TODO: Description with controls etc.
 ;
 
-; Catch for any indirect jumps to null (0x00).
-; Also serves as a temporary register or discard register for data.
-; Treat 0x00 like a register. It can be used anywhere so don't expect it to survive a subroutine.
+; Constants
+;
+GB_LO_EMPTY	equ	0x01	; Empty gameboard with a solid boarder on the left edge. X=0, 1st byte bit 0 (LSB).
+GB_HI_EMPTY	equ	0x08	; Empty gameboard with a solid boarder on the right edge. X=11, 2nd byte bit 3.
+
+BLOCK_CHAR	equ	0x23	; #
+EMPTY_CHAR	equ	0x20	; Space
+
+CR_CHAR	equ	0x0D	; Carriage Return CR \r
+LF_CHAR	equ	0x0A	; Linefeed LF \n
+
+; Number constants
+ZERO_CHAR	equ	0x30
+
+; Alphabet constants
+A_CHAR	equ	0x41
+B_CHAR	equ	A_CHAR+1
+C_CHAR	equ	A_CHAR+2
+D_CHAR	equ	A_CHAR+3
+E_CHAR	equ	A_CHAR+4
+F_CHAR	equ	A_CHAR+5
+G_CHAR	equ	A_CHAR+6
+H_CHAR	equ	A_CHAR+7
+I_CHAR	equ	A_CHAR+8
+J_CHAR	equ	A_CHAR+9
+K_CHAR	equ	A_CHAR+10
+L_CHAR	equ	A_CHAR+11
+M_CHAR	equ	A_CHAR+12
+N_CHAR	equ	A_CHAR+13
+O_CHAR	equ	A_CHAR+14
+P_CHAR	equ	A_CHAR+15
+Q_CHAR	equ	A_CHAR+16
+R_CHAR	equ	A_CHAR+17
+S_CHAR	equ	A_CHAR+18
+T_CHAR	equ	A_CHAR+19
+U_CHAR	equ	A_CHAR+20
+V_CHAR	equ	A_CHAR+21
+W_CHAR	equ	A_CHAR+22
+X_CHAR	equ	A_CHAR+23
+Y_CHAR	equ	A_CHAR+24
+Z_CHAR	equ	A_CHAR+25
+
+; Additional instructions
+AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs aa and bb together, and stores in aa.
+
+; Catch for any jumps to null (0x00). This usually indicates a subroutine hasn't had its return address set.
+;
+; Also used as a temporary storage register, and as the 
 ;
 	org	0x00
 tmp	halt
@@ -17,12 +62,6 @@ tmp	halt
 	org	0x01
 exec	jmp	run	; Jump to start of program
 
-; Constants
-;
-block_char	data	0x23	; #
-empty_char	data	0x20	; Space
-newline	data	0x0D	; Carriage Return CR \r
-	data	0x0A	; Linefeed LF \n
 
 ; Pieces templates
 ;
@@ -84,24 +123,45 @@ current_y	skip	1
 ;
 test_loop_i	skip	1
 run
-	st	#gameboard-2,	render_ptr
-	st	#0,	render_row
-	st	#21,	render_rows
-	st	#0,	render_col
-	st	#12,	render_cols
+;	jsr	render_board_ret,	render_board
+;	jmp	halt_prog
 
-	jsr	render_ret,	render
-	jmp	halt_prog
-
-	; TODO
 	; Test loop:
 	; 1. Prepare piece buffer
 	; 2. Render piece buffer
+
+	st	#1,	shift_stage_n	; Initial piece shift. Right by 1.
 
 	st	#0,	current_piece	; TODO: Randomize
 	st	#0,	current_pose	; Initial piece pose = 0
 	st	#0,	current_x
 	st	#16,	current_y	; Initial piece position in top of board (20 - 4)
+
+	jsr	prep_piece_ret,	prep_piece	; Prepare piece stage
+	jsr	shift_stage_ret,	shift_stage	; Move piece right by 1
+
+tst_shift_loop
+
+	;jsr	shift_stage_ret,	shift_stage	; Move piece right by 1
+	dec	current_y		; Move piece down by 1
+	jsr	check_cln_ret,	check_cln	; Check collision between piece and board
+	jne	tmp,	print_hit	; Check if hit
+
+	outc	#M_CHAR
+	outc	#I_CHAR
+	outc	#S_CHAR
+	outc	#S_CHAR
+	outc	#CR_CHAR		; \r
+	outc	#LF_CHAR		; \n
+	jmp	tst_shift_loop
+
+print_hit
+	out	tmp
+	outc	#H_CHAR		; H
+	outc	#I_CHAR		; I
+	outc	#T_CHAR		; T
+	jmp	halt_prog
+
 
 	st	#-6,	test_loop_i
 test_loop
@@ -132,26 +192,53 @@ test_loop
 
 	incjne	test_loop_i,	test_loop
 halt_prog
-	outc	newline+0
-	outc	newline+1
-	outc	#0x48		; H
-	outc	#0x41		; A
-	outc	#0x4C		; L
-	outc	#0x54		; T
+	outc	#CR_CHAR
+	outc	#LF_CHAR
+	outc	#H_CHAR		; H
+	outc	#A_CHAR		; A
+	outc	#L_CHAR		; L
+	outc	#T_CHAR		; T
 
 	halt
 
-; TODO
-; Subroutine that gets the OR'd value of the piece stage and the game board(+ row)
-; This is for rendering the piece, overlayed on the game board.
+render_board
+	st	#gameboard-2,	render_ptr
+	st	#0,	render_row
+	st	#21,	render_rows
+	st	#0,	render_col
+	st	#12,	render_cols
+	jsr	render_ret,	render
 
-; TODO
-; Subroutine that checks for a collision (AND) between the piece stage and the game board(+ row)
-check_col_res	skip	1
-check_col
-	st	piece_stage+0,	tmp
+render_board_ret	jmp	0	; Return from subroutine
 
+; Subroutine that checks for a collision (AND) between the piece stage and the gameboard + current_y
+; tmp will be set to non-zero if a collission occured.
+; 
+cc_count	skip	1
+check_cln
+	st	#-8,	cc_count
+	st	#piece_stage,	cc_ps_ptr	; Prepare piece stage pointer
 
+	st	#gameboard,	cc_gb_ptr	; Prepare gameboard pointer
+	st	current_y,	tmp
+	lsl	tmp
+	addto	tmp,	cc_gb_ptr
+
+cc_loop				; Begin AND loop
+	clr	tmp
+cc_gb_ptr	add	tmp,	0	; Indirect fetch gameboard into tmp
+
+cc_ps_ptr	insn AND_INSN	;tmp	;0	; Indirect AND piece stage byte over tmp. [aa] = [aa] & [bb]
+
+	jne	tmp,	cc_break	; Break out of loop
+
+	inc	cc_gb_ptr
+	inc	cc_ps_ptr
+
+	incjne	cc_count,	cc_loop
+
+cc_break	
+check_cln_ret	jmp	0		; Return from subroutine
 
 ; Shift piece stage by a given number of columns
 ; +ve column value = to the right of the gameboard = left shifting bits towards MSB
@@ -295,9 +382,9 @@ r_print_loop	; Start print loop
 	ror	render_tmp+0		; C -> bit 7. Bit 0 -> C
 
 	jcc	r_print_e		; Print empty square if C==0
-	outc	block_char		; Else print block
+	outc	#BLOCK_CHAR		; Else print block
 	jmp	r_after
-r_print_e	outc	empty_char
+r_print_e	outc	#EMPTY_CHAR
 r_after
 	outc	#0x7C ; TEST
 	incjne	render_c_rem,	r_print_loop
@@ -305,8 +392,8 @@ r_after
 
 	; TODO: Move down 1, left render_cols
 	; KLUDGE:
-	outc	newline+0
-	outc	newline+1
+	outc	#CR_CHAR
+	outc	#LF_CHAR
 
 	rsbto	#2,	r_buf_lo	; Subtract 2 from each pointer
 	rsbto	#2,	r_buf_hi
@@ -372,50 +459,51 @@ rshift_ret	jmp	0		; Return from subroutine
 ;	^ LSB     MSB ^ | ^ LSB     MSB ^
 ; Byte:	0               | 1
 ;
+
+
 	data	0xFF	; Provide a solid boarder "below" the gameboard, at Y=-1.
 	data	0xFF	; This simplifies collision detection.
-; gameboard	skip	40
 gameboard			; Solid boarder along left and right edge of board
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
-	data	0x01
-	data	0x08
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
+	data	GB_LO_EMPTY
+	data	GB_HI_EMPTY
 
 
 
