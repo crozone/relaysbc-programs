@@ -18,15 +18,15 @@ Any primes found are saved to an array starting at 0x80, and printed to the cons
 
 This version also has a feature that erases the prime array before starting the prime search.
 
-**Run from address 0x02.**
+**Run from address 0x01.**
 
 **View primes starting at address 0x80.**
 
 This method uses an optimised prime check function that doesn't require square root. Instead, it checks whether the current divisor is greater than or equal to the previous quotient found. If so, it knows that the current divisor is greater than the candidate's square root, without ever having to do a square root calculation.
 
-The prime check function does not handle n = 2 as a special case for performance reasons. Instead the main function cheats by emmiting 2 before the search loop.
+The prime check function does not handle n = 2 as a special case for performance reasons. Instead the main function cheats by emitting 2 before the search loop.
 
-The prime check function also uses a hysteresis prime array (like `primes-hist.asm`) to reduce the search space.
+The prime check function also uses a hysteresis prime array. By only dividing by primes that were previously found, the search space is significantly reduced.
 
 The main outer loop tracks the decimal value of the prime candidate in parallel to avoid needing a hex to decimal conversion function.
 
