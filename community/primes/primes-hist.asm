@@ -67,8 +67,6 @@ sprimes_stind1	st	#2,	0	; Write 2 to the start of the primes array.
 	inc	sprimes_arrhead		; Increment the head by 1
 
 	outc	#ZERO_CHAR+2		; Print 2 to console.
-	outc	#COMMA_CHAR		; Print comma
-	outc	#SPACE_CHAR		; Print space
 	
 	; Prep the decimal prime print function
 	st	#3, dec_out_val+0
@@ -87,10 +85,9 @@ sprimes_start	jsr	isprime_ret,	isprime	; Check if the current isprime_n is prime
 	st	sprimes_arrhead,	sprimes_stind2	; Prime store instruction with pointer
 sprimes_stind2	st	isprime_n,	0	; Write prime to array
 	inc	sprimes_arrhead		; Increment array head
-	jsr	dev_out_print_ret,	dev_out_print	; Print prime to console
 	outc	#COMMA_CHAR		; Print comma
 	outc	#SPACE_CHAR		; Print space
-
+	jsr	dev_out_print_ret,	dev_out_print	; Print prime to console
 
 sprimes_next	addto	#2,	isprime_n	; Increment the prime candidate. Jump by 2 to skip even numbers that can't be prime.
 	jcs	sprimes_ret		; If we overflowed the test prime (carry set), stop testing.
