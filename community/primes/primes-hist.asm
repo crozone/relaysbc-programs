@@ -39,11 +39,10 @@ run_ret	jmp	0
 
 ; Clear primes array function. This zeroes the primes array until it hits a 0x00.
 ;
-clrp_tmp	skip	1		; Needed for indirect load
 clrp
-clrp_loop	clr	clrp_tmp		; Prep tmp for load
-clrp_arrhead	add	clrp_tmp,	0	; Load value from array head
-	jeq	clrp_tmp,	clrp_ret	; Stop as soon as we hit a 0x00 in the array
+clrp_loop	clr	tmp		; Prep tmp for load
+clrp_arrhead	add	tmp,	0	; Load value from array head
+	jeq	tmp,	clrp_ret	; Stop as soon as we hit a 0x00 in the array
 	st	clrp_arrhead,	clrp_ind
 clrp_ind	clr	0		; Current array head is not 0x00, so clear it
 	incjne	clrp_arrhead,	clrp_loop	; Increment array head pointer and loop
@@ -199,18 +198,25 @@ dev_out_overflow_1	inc	dec_out_val+2		; Increment the hundreds digit and return.
 ;
 ; This function prints the above decimal representation to the console. It handles the conversion to ASCII characters internally.
 ;
-dev_out_print	jeq	dec_out_val+2,	dev_out_print_1	; Skip printing leading zero
-	addto	#ZERO_CHAR,	dec_out_val+2	; Convert to ASCII character
-	outc	dec_out_val+2		; Print hundreds digit
-	rsbto	#ZERO_CHAR, dec_out_val+2		; Revert ASCII conversion
-dev_out_print_1	jne	dec_out_val+1,	dev_out_print_1_a
+dev_out_print
+	jeq	dec_out_val+2,	dev_out_print_1	; Skip printing leading zero
+	st	#ZERO_CHAR,	tmp	; Convert to ASCII number
+	addto	dec_out_val+2,	tmp
+	outc	tmp		; Print hundreds digit
+
+dev_out_print_1
+	jne	dec_out_val+1,	dev_out_print_1_a
 	jne	dec_out_val+2,	dev_out_print_1_a
 	jmp	dev_out_print_0		; Skip printing leading zero if this and previous digit was zero
-dev_out_print_1_a	addto	#ZERO_CHAR,	dec_out_val+1
-	outc	dec_out_val+1
-	rsbto	#ZERO_CHAR,	dec_out_val+1
-dev_out_print_0	addto	#ZERO_CHAR,	dec_out_val+0
-	outc	dec_out_val+0
-	rsbto	#ZERO_CHAR,	dec_out_val+0
+dev_out_print_1_a
+	st	#ZERO_CHAR,	tmp
+	addto	dec_out_val+1,	tmp
+	outc	tmp
+
+dev_out_print_0
+	st	#ZERO_CHAR,	tmp
+	addto	dec_out_val+0,	tmp
+	outc	tmp
+
 dev_out_print_ret	jmp	0
 
