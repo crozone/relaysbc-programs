@@ -13,6 +13,7 @@ GB_HI_EMPTY	equ	0x08	; Empty gameboard with a solid boarder on the right edge. X
 
 BLOCK_CHAR	equ	0x23	; #
 EMPTY_CHAR	equ	0x20	; Space
+BAR_CHAR	equ	0x7C	; |
 
 CR_CHAR	equ	0x0D	; Carriage Return CR \r
 LF_CHAR	equ	0x0A	; Linefeed LF \n
@@ -49,7 +50,8 @@ Y_CHAR	equ	A_CHAR+24
 Z_CHAR	equ	A_CHAR+25
 
 ; Additional instructions
-AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs aa and bb together, and stores in aa.
+AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs [aa] and [bb], and stores in [aa].
+STINC_INSN	equ	0x08200000	; Stores [aa] + 1 --> [bb] in one instruction.
 
 ; Catch for any jumps to null (0x00). This usually indicates a subroutine hasn't had its return address set.
 ;
@@ -121,7 +123,6 @@ current_y	skip	1
 
 ; Start of application code
 ;
-test_loop_i	skip	1
 run
 ;	jsr	render_board_ret,	render_board
 ;	jmp	halt_prog
@@ -163,11 +164,6 @@ print_hit
 	jmp	halt_prog
 
 
-	st	#-6,	test_loop_i
-test_loop
-	inc	current_piece
-
-	jsr	prep_piece_ret,	prep_piece
 
 	st	#piece_stage,	render_ptr
 	st	#0,	render_row
@@ -175,22 +171,7 @@ test_loop
 	st	#0,	render_col
 	st	#10,	render_cols
 
-	st	#4,	shift_stage_n	; Initial piece position in middle of board (10/2 - 3/2)
-	jsr	shift_stage_ret,	shift_stage
-
 	jsr	render_ret,	render
-
-	st	#2,	shift_stage_n
-	jsr	shift_stage_ret,	shift_stage
-
-	jsr	render_ret,	render
-
-	st	#-6,	shift_stage_n
-	jsr	shift_stage_ret,	shift_stage
-
-	jsr	render_ret,	render
-
-	incjne	test_loop_i,	test_loop
 halt_prog
 	outc	#CR_CHAR
 	outc	#LF_CHAR
@@ -209,9 +190,60 @@ render_board
 	st	#12,	render_cols
 	jsr	render_ret,	render
 
-render_board_ret	jmp	0	; Return from subroutine
+render_board_ret	jmp	0		; Return from subroutine
 
-; Subroutine that checks for a collision (AND) between the piece stage and the gameboard + current_y
+; Prepares to call get_row.
+; Sets up pointers within get row to blend the row at current_y with the first row of the piece stage.
+prep_get_row
+	st	#0	gr_count
+	st	#gr_row_out,	gr_dest
+	st	#piece_stage,	gs_ps_ptr
+	st	#gameboard,	gs_gb_ptr
+	st	current_y,	tmp
+	lsl	tmp
+	addto	tmp,	gs_gb_ptr
+
+prep_get_row_ret	jmp	0		; Return from subroutine
+
+; Get a row of the piece stage, combined with the approprate row of the board.
+;
+; This is used for rendering the game board to the display,
+; as well as stamping the piece stage to the board after a downward collision.
+;
+; This subroutine is designed to be called 4 times, once for each row.
+; Pointers will be advanced by one row after each call.
+;
+; prep_get_row should be called before the first call.
+;
+get_row_out	skip	2
+gr_ps_fetch	skip	1
+gr_count	skip	1
+get_row
+
+	inc	gr_count
+
+	clr	tmp
+gr_ps_ptr	add	tmp,	0	; Indirect fetch piece stage
+
+	clr	gr_gb_fetch,
+gr_gb_ptr	add	gr_gb_fetch,	0
+
+	; Y = X | Y
+	bicto	gr_gb_fetch,	tmp
+	addto	gr_gb_fetch,	tmp
+
+gr_dest	st	tmp,	0
+
+	inc	gr_ps_ptr
+	inc	gr_gb_ptr
+	inc	gr_dest
+
+	jo	gr_count,	get_row_ret
+
+get_row_ret	jmp	0	; Return from subroutine
+
+
+; Check for collision (AND) between the piece stage and the gameboard + current_y
 ; tmp will be set to non-zero if a collission occured.
 ; 
 cc_count	skip	1
@@ -228,7 +260,7 @@ cc_loop				; Begin AND loop
 	clr	tmp
 cc_gb_ptr	add	tmp,	0	; Indirect fetch gameboard into tmp
 
-cc_ps_ptr	insn AND_INSN	;tmp	;0	; Indirect AND piece stage byte over tmp. [aa] = [aa] & [bb]
+cc_ps_ptr	insn AND_INSN	;tmp,	;0	; Indirect AND piece stage byte over tmp. [aa] = [aa] & [bb]
 
 	jne	tmp,	cc_break	; Break out of loop
 
@@ -282,6 +314,7 @@ shift_stage_ret	jmp	0
 
 
 ; Prepare piece buffer
+;
 ; This function takes a piece number and a pose, and writes it to a buffer as 8 separate bytes,
 ; which is in the same layout as the piece board.
 ;
@@ -362,6 +395,7 @@ render
 	lsl	tmp
 	addto	tmp,	r_buf_lo
 
+	; TODO: Replace with stinc - 0x08200000
 	st	r_buf_lo,	r_buf_hi
 	inc	r_buf_hi
 
@@ -386,7 +420,7 @@ r_print_loop	; Start print loop
 	jmp	r_after
 r_print_e	outc	#EMPTY_CHAR
 r_after
-	outc	#0x7C ; TEST
+	outc	#BAR_CHAR		; | - XXX
 	incjne	render_c_rem,	r_print_loop
 	; End print loop
 
