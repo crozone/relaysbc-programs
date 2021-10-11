@@ -1,27 +1,36 @@
 ; Prime Number Calculator (with hysteresis)
-; Ryan Crosby 2018 - 2019
+; Ryan Crosby 2018 - 2021
 ;
-; Run from 0x02.
+; Run from 0x01.
 ;
-; Primes will be saved to an array at 0x80 (by default). To change this address, change the value of 0x01.
-; Primes will also be written to the serial console in proper decimal ASCII form.
+; Primes will be saved to an array at 0x80 (by default). To change this address, change the value of 0x02.
+; Primes will also be written to the serial console in decimal ASCII form.
 ;
 
+; Constants
+;
+SPACE_CHAR	equ	0x20
+COMMA_CHAR	equ	0x2C
+ZERO_CHAR	equ	0x30
+
 ; Catch for any indirect jumps to null (0x00).
+; Also use this as a temporary variable
 ;
 	org	0x00
-	halt
+tmp	halt
 
 ; Configure the location for the primes destination array.
 ;
 	org	0x01
+
+; ENTRY POINT
+	org	0x01
+exec	jmp	run	; Jump to start of program
+
+	org	0x02
 arr_start	data	0x80
 
 ; Run. Main program starts here.
-;
-; Run from 0x02
-;
-	org	0x02
 run	st	arr_start,	clrp_arrhead	; Erase from array start
 	jsr	clrp_ret,	clrp	; Erase primes array
 	st	arr_start,	sprimes_arrptr	
@@ -47,7 +56,6 @@ clrp_ret	jmp	0		; Return
 ;
 ; In order to save memory and reduce copying, we use the variables on isprime as state storage rather than tracking them at the start of this function.
 ;
-	org	0x10
 sprimes_arrptr	skip	1		; Pointer to the location of the primes array
 sprimes_arrhead	skip	1		; Pointer to the head of the primes array
 	
@@ -59,14 +67,14 @@ sprimes	st	sprimes_arrptr,	sprimes_arrhead
 sprimes_stind1	st	#2,	0	; Write 2 to the start of the primes array.
 	inc	sprimes_arrhead		; Increment the head by 1
 
-	outc	#0x32		; Print 2 to console.
-	outc	#0x2C		; Print comma
-	outc	#0x20		; Print space
+	outc	#ZERO_CHAR+2		; Print 2 to console.
+	outc	#COMMA_CHAR		; Print comma
+	outc	#SPACE_CHAR		; Print space
 	
 	; Prep the decimal prime print function
-	st	#3, dechlp_0
-	clr	dechlp_1
-	clr	dechlp_2
+	st	#3, dec_out_val+0
+	clr	dec_out_val+1
+	clr	dec_out_val+2
 
 	; Prep the isprime function
 	st	#3,	isprime_n	; Start the prime search from three, since we've already found 2.
@@ -80,14 +88,14 @@ sprimes_start	jsr	isprime_ret,	isprime	; Check if the current isprime_n is prime
 	st	sprimes_arrhead,	sprimes_stind2	; Prime store instruction with pointer
 sprimes_stind2	st	isprime_n,	0	; Write prime to array
 	inc	sprimes_arrhead		; Increment array head
-	jsr	dechlp_print_ret,	dechlp_print	; Print prime to console
-	outc	#0x2C		; Print comma
-	outc	#0x20		; Print space
+	jsr	dev_out_print_ret,	dev_out_print	; Print prime to console
+	outc	#COMMA_CHAR		; Print comma
+	outc	#SPACE_CHAR		; Print space
 
 
 sprimes_next	addto	#2,	isprime_n	; Increment the prime candidate. Jump by 2 to skip even numbers that can't be prime.
 	jcs	sprimes_ret		; If we overflowed the test prime (carry set), stop testing.
-	jsr	dechlp_inc2_ret,	dechlp_inc2	; Increment decimal value of prime candidate by 2.
+	jsr	dev_out_inc2_ret,	dev_out_inc2	; Increment decimal value of prime candidate by 2.
 	jmp	sprimes_start		; Jump back to start of loop.
 sprimes_ret	jmp	0		; Return to the calling function.
 
@@ -165,41 +173,44 @@ div_ret	jmp	0
 
 ; Track decimal representation of the prime for fast printing
 ;
-dechlp_0	skip	1		; Ones digit [0]
-dechlp_1	skip	1		; Tens digit [1]
-dechlp_2	skip	1		; Hundreds digit [2]
+; [0] - ones digit
+; [1] - tens digit
+; [2] - hundreds digit
+;
+dec_out_val	skip	3
 
 ; Increment by 2 function.
 ;
 ; This function increments the above decimal representation by 2 every time it is run.
 ;
-dechlp_inc2	rsbto	#8,	dechlp_0	; First subtract 8 to test if we're about to overflow the ones digit [0].
-	jge	dechlp_0,	dechlp_overflow_0	; If (([0] + 2) - 10) < 0, we have overflowed the ones digit [0].
-	addto	#10,	dechlp_0	; No overflow on ones yet, add 10 on to accomplish an overall [0] += 2
-dechlp_inc2_ret	jmp	0	; Return subroutine
-dechlp_overflow_0	rsbto	#9,	dechlp_1
-	jge	dechlp_1,	dechlp_overflow_1	; IF (([1] + 1) - 10) < 0, we have overflowed the tens digit.
-	addto	#10,	dechlp_1	; No overflow on tens yet, add 10 on to accomplish overall [1] += 1
-	jmp	dechlp_inc2_ret		; Return
-dechlp_overflow_1	inc	dechlp_2		; Increment the hundreds digit and return. Don't bother to overflow check hundreds digit.
-	jmp	dechlp_inc2_ret		; Return
+dev_out_inc2	rsbto	#8,	dec_out_val+0	; Subtract 8 to test if we're about to overflow the ones digit.
+	jge	dec_out_val+0,	dev_out_overflow_0	; If (([0] + 2) - 10) < 0, we have overflowed the ones digit [0].
+	addto	#10,	dec_out_val+0	; No overflow, add 10 on to increment by 2 overall
+dev_out_inc2_ret	jmp	0		; Return subroutine
+
+dev_out_overflow_0	rsbto	#9,	dec_out_val+1	; We had an overflow, subtract 9 to test if we're about to overflow.
+	jge	dec_out_val+1,	dev_out_overflow_1	; I (([1] + 1) - 10) < 0, we have overflowed the tens digit.
+	addto	#10,	dec_out_val+1	; No overflow on tens yet, add 10 to increment by 1 overall
+	jmp	dev_out_inc2_ret		; Return
+dev_out_overflow_1	inc	dec_out_val+2		; Increment the hundreds digit and return. Don't bother to overflow check hundreds digit.
+	jmp	dev_out_inc2_ret		; Return
 
 ; Print function.
 ;
 ; This function prints the above decimal representation to the console. It handles the conversion to ASCII characters internally.
 ;
-dechlp_print	jeq	dechlp_2,	dechlp_print_1	; Skip printing leading zero
-	addto	#0x30,	dechlp_2	; Convert to ASCII character
-	outc	dechlp_2		; Print hundreds digit
-	rsbto	#0x30, dechlp_2		; Revert ASCII conversion
-dechlp_print_1	jne	dechlp_1,	dechlp_print_1_a
-	jne	dechlp_2,	dechlp_print_1_a
-	jmp	dechlp_print_0		; Skip printing leading zero if this and previous digit was zero
-dechlp_print_1_a	addto	#0x30,	dechlp_1
-	outc	dechlp_1
-	rsbto	#0x30,	dechlp_1
-dechlp_print_0	addto	#0x30,	dechlp_0
-	outc	dechlp_0
-	rsbto	#0x30,	dechlp_0
-dechlp_print_ret	jmp	0
+dev_out_print	jeq	dec_out_val+2,	dev_out_print_1	; Skip printing leading zero
+	addto	#ZERO_CHAR,	dec_out_val+2	; Convert to ASCII character
+	outc	dec_out_val+2		; Print hundreds digit
+	rsbto	#ZERO_CHAR, dec_out_val+2		; Revert ASCII conversion
+dev_out_print_1	jne	dec_out_val+1,	dev_out_print_1_a
+	jne	dec_out_val+2,	dev_out_print_1_a
+	jmp	dev_out_print_0		; Skip printing leading zero if this and previous digit was zero
+dev_out_print_1_a	addto	#ZERO_CHAR,	dec_out_val+1
+	outc	dec_out_val+1
+	rsbto	#ZERO_CHAR,	dec_out_val+1
+dev_out_print_0	addto	#ZERO_CHAR,	dec_out_val+0
+	outc	dec_out_val+0
+	rsbto	#ZERO_CHAR,	dec_out_val+0
+dev_out_print_ret	jmp	0
 
