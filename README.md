@@ -44,8 +44,13 @@ Firmware files for the various microcontrollers included on the sbrc
 
 | Program | Author | Description |
 | --- | --- | --- |
-| [docs](docs/) | Joe Allen | Reference card, assembly instructions, BoM, PCB drawings, schematics |
-| [htdocs](htdocs/) | Joe Allen | HTML documentation |
+| [docs](docs/) | Joe Allen | Build instructions, BoM, PCB drawings, schematics |
+| [refcard](docs/refcard.pdf) | Joe Allen | The reference card for CPU instructions |
+| [htdocs](htdocs/) | Joe Allen | HTML documentation including design details and in-depth documentation |
+| [Extra instructions](extra-docs/extra-instructions.md) | Ryan Crosby | Additional useful instructions not included in the reference card |
+| [Magic instructions](extra-docs/magic-instructions.md) | Ryan Crosby | Notes on special instructions trapped by the PIC |
+
+
 
 
 ## License
