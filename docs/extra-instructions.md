@@ -59,8 +59,10 @@ Saves the value of the Program Counter + 1 to [bb].
 
 Saves the value of the Program Counter + 1 to [aa].
 
-
 ## Bit reference
+
+![sbrc block diagram](sbrc-block.gif)
+
 | OP CODE | Operation |
 | --- | --- |
 | 0x00010000 | CC_N |
