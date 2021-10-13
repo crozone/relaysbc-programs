@@ -5,8 +5,8 @@
 | Value | OP CODE | Operation | Description |
 | --- | --- | --- | --- |
 | 0x00010000 | CC_N | Condition Code Negative | Jump if ALU A data is negative (A data bit 7 is set) |
-| 0x00020000 | CC_Z | Condition Code Zero | Jump if ALU carry output is set (overflow condition). Used to test for increment wrap around to zero. |
-| 0x00040000 | CC_C | Condition Code Carry | Jump if carry register is clear |
+| 0x00020000 | CC_Z | Condition Code Zero | Jump if ALU carry output is set (overflow condition). Used to test A data for zero (by complementing A data and add 1 via carry invert). Used to test for increment wrap around to zero. |
+| 0x00040000 | CC_C | Condition Code Carry | Jump if carry register is clear. |
 | 0x00080000 | CC_INV | Condition Code Invert | Invert the result of the jump condition check |
 | 0x00100000 | CEN | Carry Enable | The current value of the carry register is fed into the ALU carry input. |
 | 0x00200000 | CINV | Carry Invert | The carry input of the ALU is inverted. |
