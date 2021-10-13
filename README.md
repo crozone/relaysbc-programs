@@ -8,6 +8,7 @@ The original SourceForge project page can be found here: https://sourceforge.net
 An introductory video from Joe Allen can be found here: https://www.youtube.com/watch?v=k1hJoalcK68
 
 ![sbrc image](sbrc.jpg)
+[Full size image](sbrc-large.jpg)
 
 
 ## Programs
@@ -47,6 +48,7 @@ Firmware files for the various microcontrollers included on the sbrc
 | [docs](docs/) | Joe Allen | Build instructions, BoM, PCB drawings, schematics |
 | [refcard](docs/refcard.pdf) | Joe Allen | The reference card for CPU instructions |
 | [htdocs](htdocs/) | Joe Allen | HTML documentation including design details and in-depth documentation |
+| [OP CODE details](extra-docs/opcodes.md) | Ryan Crosby | Details about each OP CODE flag in the CPU instruction |
 | [Extra instructions](extra-docs/extra-instructions.md) | Ryan Crosby | Additional useful instructions not included in the reference card |
 | [Magic instructions](extra-docs/magic-instructions.md) | Ryan Crosby | Notes on special instructions trapped by the PIC |
 

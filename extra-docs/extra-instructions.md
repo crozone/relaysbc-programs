@@ -58,27 +58,3 @@ Saves the value of the Program Counter + 1 to [bb].
 ### 8400 aa 00: stjsr aa
 
 Saves the value of the Program Counter + 1 to [aa].
-
-## Bit reference
-
-![sbrc block diagram](sbrc-block.gif)
-
-| OP CODE | Operation |
-| --- | --- |
-| 0x00010000 | CC_N |
-| 0x00020000 | CC_Z  |
-| 0x00040000 | CC_C |
-| 0x00080000 | CC_INV |
-| 0x00100000 | CEN |
-| 0x00200000 |CINV|
-| 0x00400000 |COM|
-| 0x00800000 |BEN|
-| 0x01000000 |AND|
-| 0x02000000 |ROR|
-| 0x04000000 |JSR|
-| 0x08000000 |WRB|
-| 0x10000000 |OUT|
-| 0x20000000 |IN|
-| 0x40000000 |IMM|
-| 0x80000000 |WRA|
-
