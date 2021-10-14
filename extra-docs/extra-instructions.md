@@ -16,14 +16,14 @@ This document is an attempt to record some extra, useful instructions, which are
 
 | OP CODE | Mnemonic (unofficial) | Operation |
 | --- | --- | --- |
-| 0820_aabb | stinc aa bb | [aa] + 1 &rarr; [bb] |
+| 0820_aabb | incto aa bb | [aa] + 1 &rarr; [bb] |
 | 8180_aabb | and aa bb | [aa] & [bb] &rarr; [aa] |
 | 80D0_aabb | rsbc aa bb | [bb] - [aa] - ~C &rarr; [aa] |
 | 81C0_aabb | bic aa bb | ~[aa] & [bb] &rarr; [aa] |
 | 8400_aa00 | stjsr aa | PC + 1 &rarr; [aa] |
 | 0C00_00bb | stjsrto bb | PC + 1 &rarr; [bb] |
 
-### 0820_aabb: stinc aa bb
+### 0820_aabb: incto aa bb
 
 Store the value of [aa] + 1 to [bb].
 
@@ -58,25 +58,3 @@ Saves the value of the Program Counter + 1 to [bb].
 ### 8400 aa 00: stjsr aa
 
 Saves the value of the Program Counter + 1 to [aa].
-
-
-## Bit reference
-| OP CODE | Operation |
-| --- | --- |
-| 0x00010000 | CC_N |
-| 0x00020000 | CC_Z  |
-| 0x00040000 | CC_C |
-| 0x00080000 | CC_INV |
-| 0x00100000 | CEN |
-| 0x00200000 |CINV|
-| 0x00400000 |COM|
-| 0x00800000 |BEN|
-| 0x01000000 |AND|
-| 0x02000000 |ROR|
-| 0x04000000 |JSR|
-| 0x08000000 |WRB|
-| 0x10000000 |OUT|
-| 0x20000000 |IN|
-| 0x40000000 |IMM|
-| 0x80000000 |WRA|
-

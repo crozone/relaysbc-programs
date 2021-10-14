@@ -117,6 +117,14 @@ const struct { char *insn; unsigned long opcode; int type; } table[] =
 	{ 0, 0, 0 }
 };
 
+/*
+ * assemble() is called once per line in the input asm file.
+ *
+ * addr is the current address, it is updated and returned by assemble, and then fed back in on the next line.
+ * buf is a char* to the start of the line. It is null terminated and does not contain a \n newline at the end.
+ * pass is the pass number. On the 0 (first) pass, no memory is written and no lines are output to console.
+ * On the 1 (second) pass, memory is written and lines are output.
+*/
 unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 {
 	char *org = buf;
@@ -307,8 +315,47 @@ unsigned long long assemble(unsigned long long addr, char *buf, int pass)
 	} else if (type == INSN) {
 		int rtn;
 		skipws(&buf);
+
+		/* Parse base opcode */
 		rtn = expr(&buf, &right, addr, pass);
-		opcode = right;
+		opcode = right & 0xFFFFFFFF;
+
+		skipws(&buf);
+
+		/* Parse A argument (optional) */
+		if(*buf && *buf != ',') {
+			if (*buf == '#') {
+				++buf;
+				opcode |= 0x40000000;
+			}
+			rtn = expr(&buf, &left, addr, pass);
+			if(!rtn) {
+				left = 0;
+			}
+
+			opcode = (opcode & 0xFFFF00FF) | ((left & 255) << 8);
+
+			skipws(&buf);
+		}
+		else {
+			left = 0;
+		}
+
+		/* Parse B argument (optional) */
+		if (*buf == ',') {
+			++buf;
+			skipws(&buf);
+			rtn = expr(&buf, &right, addr, pass);
+			if(!rtn) {
+				right = 0;
+			}
+
+			opcode = (opcode & 0xFFFFFF00) | (right & 255);
+		}
+		else {
+			right = 0;
+		}
+
 		if (pass) {
 			output("%-7d %2.2llx %s    %s\n", line, addr, hex(8, opcode), org);
 			write_mem(addr, opcode);
