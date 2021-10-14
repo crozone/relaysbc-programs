@@ -19,14 +19,12 @@ ZERO_CHAR	equ	0x30
 	org	0x00
 tmp	halt
 
-; Configure the location for the primes destination array.
-;
-	org	0x01
-
 ; ENTRY POINT
 	org	0x01
 exec	jmp	run	; Jump to start of program
 
+; Configure the location for the primes destination array.
+;
 	org	0x02
 arr_start	data	0x80
 
