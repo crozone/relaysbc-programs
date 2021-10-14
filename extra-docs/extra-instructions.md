@@ -16,14 +16,14 @@ This document is an attempt to record some extra, useful instructions, which are
 
 | OP CODE | Mnemonic (unofficial) | Operation |
 | --- | --- | --- |
-| 0820_aabb | stinc aa bb | [aa] + 1 &rarr; [bb] |
+| 0820_aabb | incto aa bb | [aa] + 1 &rarr; [bb] |
 | 8180_aabb | and aa bb | [aa] & [bb] &rarr; [aa] |
 | 80D0_aabb | rsbc aa bb | [bb] - [aa] - ~C &rarr; [aa] |
 | 81C0_aabb | bic aa bb | ~[aa] & [bb] &rarr; [aa] |
 | 8400_aa00 | stjsr aa | PC + 1 &rarr; [aa] |
 | 0C00_00bb | stjsrto bb | PC + 1 &rarr; [bb] |
 
-### 0820_aabb: stinc aa bb
+### 0820_aabb: incto aa bb
 
 Store the value of [aa] + 1 to [bb].
 
