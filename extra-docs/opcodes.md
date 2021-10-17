@@ -27,9 +27,9 @@ JUMP &equiv; CC_INV &oplus; &lpar; CC_N &and;  A_DATA.7 &or; CC_Z &and; ALU_
 
 If JUMP then bb &rarr; PC
 
-
-
 If JUMP is true, the CPU will write the B address (the literal value of B, *not* "B data") to the program counter, causing the CPU to jump to address bb on the next clock.
+
+[Truth table](jmp-truth-table.md)
 
 ### ALU Carry In Logic
 
