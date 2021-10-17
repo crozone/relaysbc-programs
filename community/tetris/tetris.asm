@@ -51,7 +51,7 @@ Z_CHAR	equ	A_CHAR+25
 
 ; Additional instructions
 AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs [aa] and [bb], and stores in [aa].
-STINC_INSN	equ	0x08200000	; Stores [aa] + 1 --> [bb] in one instruction.
+INCTO_INSN	equ	0x08200000	; Stores [aa] + 1 --> [bb] in one instruction.
 
 ; Catch for any jumps to null (0x00). This usually indicates a subroutine hasn't had its return address set.
 ;
@@ -260,7 +260,7 @@ cc_loop				; Begin AND loop
 	clr	tmp
 cc_gb_ptr	add	tmp,	0	; Indirect fetch gameboard into tmp
 
-cc_ps_ptr	insn AND_INSN	;tmp,	;0	; Indirect AND piece stage byte over tmp. [aa] = [aa] & [bb]
+cc_ps_ptr	insn AND_INSN	tmp,	0	; Indirect AND piece stage byte over tmp. [aa] = [aa] & [bb]
 
 	jne	tmp,	cc_break	; Break out of loop
 
@@ -395,9 +395,7 @@ render
 	lsl	tmp
 	addto	tmp,	r_buf_lo
 
-	; TODO: Replace with stinc - 0x08200000
-	st	r_buf_lo,	r_buf_hi
-	inc	r_buf_hi
+	insn INCTO_INSN	r_buf_lo,	r_buf_hi
 
 	; Prep outer loop counter
 	negto	render_rows,	render_r_rem
