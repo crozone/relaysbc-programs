@@ -272,46 +272,6 @@ cc_ps_ptr	insn AND_INSN	tmp,	0	; Indirect AND piece stage byte over tmp. [aa] = 
 cc_break	
 check_cln_ret	jmp	0		; Return from subroutine
 
-; Shift piece stage by a given number of columns
-; +ve column value = to the right of the gameboard = left shifting bits towards MSB
-; -ve column value = to the left of the gameboard = right shifting bits towards LSB
-
-shift_stage_n	skip	1
-shift_stage
-	addto	shift_stage_n,	current_x	; Adjust current piece position	
-
-	st	shift_stage_n,	tmp
-	jge	shift_stage_n,	ss_right
-ss_left
-	lsr	piece_stage+1		; 0 -> bit 7. Bit 0 -> C
-	ror	piece_stage+0		; C -> bit 7. Bit 0 -> C
-	lsr	piece_stage+3		; 0 -> bit 7. Bit 0 -> C
-	ror	piece_stage+2		; C -> bit 7. Bit 0 -> C
-	lsr	piece_stage+5		; 0 -> bit 7. Bit 0 -> C
-	ror	piece_stage+4		; C -> bit 7. Bit 0 -> C
-	lsr	piece_stage+7		; 0 -> bit 7. Bit 0 -> C
-	ror	piece_stage+6		; C -> bit 7. Bit 0 -> C
-
-	incjne	tmp,	ss_left
-
-	jmp	shift_stage_ret
-ss_right
-	neg	tmp
-ss_right_loop
-	lsl	piece_stage+0		; 0 -> bit 0. Bit 7 -> C
-	rol	piece_stage+1		; C -> bit 0. Bit 7 -> C
-	lsl	piece_stage+2		; 0 -> bit 0. Bit 7 -> C
-	rol	piece_stage+3		; C -> bit 0. Bit 7 -> C
-	lsl	piece_stage+4		; 0 -> bit 0. Bit 7 -> C
-	rol	piece_stage+5		; C -> bit 0. Bit 7 -> C
-	lsl	piece_stage+6		; 0 -> bit 0. Bit 7 -> C
-	rol	piece_stage+7		; C -> bit 0. Bit 7 -> C
-
-	incjne	tmp,	ss_right_loop
-
-shift_stage_ret	jmp	0
-
-
 
 ; Prepare piece buffer
 ;
@@ -456,6 +416,77 @@ rshift_loop	lsr	rshift_val
 	incjne	tmp,	rshift_loop
 rshift_ret	jmp	0		; Return from subroutine
 
+
+
+
+; GAME BOARD MK 2
+
+
+; Init gameboard function
+init_gb
+	st	#0xFF,	gameboard+0
+	st	#0xF8,	gameboard+1
+	st	gameboard+2,	init_gb_ptr+0
+	st	gameboard+3,	init_gb_ptr+1
+	st	gameboard+4,	init_gb_ptr+2
+	
+	st	-10,	tmp	; Fill the remaining 30 bytes
+init_gb_loop
+init_gb_ptr	st	#01,	0
+	st	#80,	0
+	st	#18,	0
+	inc	init_gb_ptr+0
+	inc	init_gb_ptr+1
+	inc	init_gb_ptr+2
+	incjne	tmp
+init_gb_ret	jmp	0
+
+; Gameboard.
+; 1.5 bytes per row
+
+
+; Initial:
+;
+;00: 1111 1111|1111	0xFF 0XF-
+;    1000|0000 0001	0x-8 0x01
+;03: 1000 0000|0001	0x80 0x1-
+;    1000|0000 0001	0x-8 0x01
+;06: 1000 0000|0001	0x80 0x1-
+;    1000|0000 0001	0x-8 0x01
+; ...
+
+gameboard	skip	32		; 21 rows (20 rows + floor), 1.5 bytes per row format
+
+
+; Piece staging buffer.
+; This buffer contains the current piece in the selected pose, in the same format as the game board.
+; It is 4 rows high, each row is 2 bytes, just like the game board.
+; This allows easy left/right movement of the piece (simple bitwise rotation of each row left or right),
+; and easy updating of, or collision checking with, the game board (with bitwise operations).
+piece_stage	skip	6
+
+stage_left
+	rol	piece_stage+0
+	rol	piece_stage+1
+	rol	piece_stage+2
+	rol	piece_stage+3
+	rol	piece_stage+4
+	rol	piece_stage+5
+stage_left_ret	jmp	0
+
+stage_right
+	ror	piece_stage+0
+	ror	piece_stage+1
+	ror	piece_stage+2
+	ror	piece_stage+3
+	ror	piece_stage+4
+	ror	piece_stage+5
+stage_right_ret	jmp	0
+
+; With this 1.5 byte per row setup, if the piece is on an odd row, the piece stage needs to be adjusted
+; to align with the gameboard before an AND-wise permissions check can be done.
+
+
 ; GAME BOARD
 ;
 ; Left of board is X = 1; right is X = 10
@@ -491,6 +522,7 @@ rshift_ret	jmp	0		; Return from subroutine
 ;	^ LSB     MSB ^ | ^ LSB     MSB ^
 ; Byte:	0               | 1
 ;
+
 
 
 	data	0xFF	; Provide a solid boarder "below" the gameboard, at Y=-1.
