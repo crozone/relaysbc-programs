@@ -136,173 +136,104 @@ current_y	skip	1
 ; Start of application code
 ;
 run
-;	jsr	render_board_ret,	render_board
-;	jmp	halt_prog
-
-	; Reset score
-	clr	lines_cleared
-	; Initialize gameboard
-	jsr	init_gb_ret,	init_gb
+	; Setup testing gameboard	
+	st	#FF,	gameboard+0
+	st	#F1,	gameboard+1
+	st	#8F,	gameboard+2
+	st	#FF,	gameboard+3
+	st	#FF,	gameboard+4
+	st	#FF,	gameboard+5
+	st	#FF,	gameboard+6
+	st	#5F,	gameboard+7
+	st	#FF,	gameboard+8
+	st	#FF,	gameboard+9
+	st	#FF,	gameboard+10
+	st	#FF,	gameboard+11
+	st	#FF,	gameboard+12
+	st	#FF,	gameboard+13
+	st	#FF,	gameboard+14
+	st	#FF,	gameboard+15
+	st	#FF,	gameboard+16
+	st	#FF,	gameboard+17
+	st	#FF,	gameboard+18
+	st	#FF,	gameboard+19
 	
-	; Outer loop
-outer_game_loop
-	; Select piece and init piece
-	; TODO: Actual implementation, if we have room for a pseudorandom number generator...
-	st	#0,	current_piece
-	st	#0,	current_pose
-
-	; Inner Loop
-inner_game_loop
-	; Render board
-
-	; Accept input
-
-	; Check for collision
-	; - Undo move.
-	; - If downwards collision:
-	; -- Stamp game board
-	; -- Check for lines cleared
-	; -- Clear lines
-	; -- Update lines_cleared
-
-	; Check for endgame condition (any bits set on top row)
-	; - If endgame, HALT.
-
-	; GOTO Inner Loop.
-
-	; Test loop:
-	; 1. Prepare piece buffer
-	; 2. Render piece buffer
-
-	st	#1,	shift_stage_n	; Initial piece shift. Right by 1.
-
-	st	#0,	current_piece	; TODO: Randomize
-	st	#0,	current_pose	; Initial piece pose = 0
-	st	#0,	current_x
-	st	#16,	current_y	; Initial piece position in top of board (20 - 4)
-
-	jsr	prep_piece_ret,	prep_piece	; Prepare piece stage
-	jsr	shift_stage_ret,	shift_stage	; Move piece right by 1
-
-tst_shift_loop
-
-	;jsr	shift_stage_ret,	shift_stage	; Move piece right by 1
-	dec	current_y		; Move piece down by 1
-	jsr	check_cln_ret,	check_cln	; Check collision between piece and board
-	jne	tmp,	print_hit	; Check if hit
-
-	outc	#M_CHAR
-	outc	#I_CHAR
-	outc	#S_CHAR
-	outc	#S_CHAR
-	outc	#CR_CHAR		; \r
-	outc	#LF_CHAR		; \n
-	jmp	tst_shift_loop
-
-print_hit
-	out	tmp
-	outc	#H_CHAR		; H
-	outc	#I_CHAR		; I
-	outc	#T_CHAR		; T
-	jmp	halt_prog
-
-
-
-	st	#piece_stage,	render_ptr
-	st	#0,	render_row
-	st	#4,	render_rows
-	st	#0,	render_col
-	st	#10,	render_cols
-
-	jsr	render_ret,	render
-halt_prog
-	outc	#CR_CHAR
-	outc	#LF_CHAR
-	outc	#H_CHAR		; H
-	outc	#A_CHAR		; A
-	outc	#L_CHAR		; L
-	outc	#T_CHAR		; T
-
+	
+	; Print game board
+	jsr	render_board_ret,	render_board
+	halt
+	
+	; Do line clear
+	jsr	line_clr_ret,	line_clr
+	
+	; Print game board again
+	jsr	render_board_ret,	render_board
+	
+	; Halt
 	halt
 
-render_board
-	st	#gameboard-2,	render_ptr
-	st	#0,	render_row
-	st	#21,	render_rows
-	st	#0,	render_col
-	st	#12,	render_cols
-	jsr	render_ret,	render
-
-render_board_ret	jmp	0		; Return from subroutine
-
-
-
-; Test subroutine to set up an example board, render it, perform line clear, and then render that.
-test_0
-; TODO: Setup test board
-
-	jsr	render_board
-	
-
-test_0_ret	jmp	0		; Return from subroutine
 
 ; Render board subroutine
 ;
-
-; TODO TODO TODO
-
-; Outer loop: Row loop, 16x
-; Inner loop: Column loop, 10x
-
 ; Strategy: We are going to render the gameboard from left to right, top to bottom, which allows for the most simple console output (avoids ANSI escape codes).
 ;
-; Prepare a mask for comparison. Store 0x01 in a byte.
+; SET board offset = 1
+;
+; LOOP A - Starts at top of the board and then switches to bottom half of the board
+; Store the current board byte offset into the board byte index. 1 for the top half of the board, 0 for the bottom half.
+; Prepare a mask for comparison. Store 0x80 in a byte.
+;
+; LOOP B - Works along the the row
+; DO LOOP C
+; Then:
+;    
+
+; LOOP C - Works left to right across the columns
 ; Copy the mask into a result variable
 ; Indirect AND the current gameboard byte with result variable
+; Print an '#' if the result is > 1, else print ' '
 ; 
-; 
-;
-;
-;
-; Loop over each row.
-; For each column, left shift the entire column (both bytes).
-; Rotate the carried bit from the top byte most sig bit back into the lowest sig bit of the bottom byte using the ADC (add + carry) command.
-; If the LSB is set (if top byte is odd), write a '#'. Else write a ' '.
-; After the full 10 columns are processed, write an \r\n
-; Loop to next row.
-;
-; After the subroutine completes, the entire gameboard will have been completely rotated through and restored to the original state,
-; and the gameboard will have been printed line by line to the console.
-;
-; TODO: To render the piece as well:
-;     * "Stamp" (AND) the piece onto the game board (we need this function anyway)
-;     * Render the gameboard
-;     * "Unstamp" (clear bits) the piece back off the game board
+; Rotate the mask right.
+; If carry not set, go 
+; If carry is set, we're done with the top half of the board.
 
-render_board_i	skip	1
-render_board_j	skip	1
+; Temporary variables for internal use
+render_board_top	skip	1 ; byte offset to select top or bottom of the board. 1 for top, 0 for bottom.
+render_board_mask	skip	1 ; The row mask for selecting the row to render
+render_board_col	skip	1 ; The current column iteration. -10 -> 0 (to allow for increment and jump if not zero)
 
 render_board
 ; Prep column iterator
-	st	#-10,	render_board_i
-render_board_col_loop
-	st	#-16,	render_board_j
+	st	#1,	render_board_top
+render_board_loop_a
+	st	#80,	render_board_mask
+render_board_loop_b
+	st	#gameboard,	render_board_ptr
+	addto	render_board_top,	render_board_ptr
+	st	#-10,	render_board_col
+render_board_loop_c
+	clr	tmp
+render_board_ptr	add	tmp,	0	; Load
+	
+	andto	render_board_mask,	tmp
+	jne	tmp,	render_board_print_a
+	outc	#ZERO_CHAR
+	jmp	render_board_print_b
+render_board_print_a	outc	#ZERO_CHAR+1
+render_board_print_b
+	addto	#2,	render_board_ptr	; Move onto next column byte
+	incjne	render_board_col,	render_board_loop_c	; Row render loop
 
-render_board_row_loop
-
-	jcc	r_print_e		; Print empty square if C==0
-	outc	#BLOCK_CHAR		; Else print block
-	jmp	r_after
-r_print_e	outc	#EMPTY_CHAR
-r_after
-	outc	#BAR_CHAR		; | - XXX
-	incjne	render_c_rem,	r_print_loop
-	; End print loop
-
-	; TODO: Move down 1, left render_cols
-	; KLUDGE:
 	outc	#CR_CHAR
 	outc	#LF_CHAR
+
+	lsr	render_board_mask		; Logical shift right (0 into top spot). This moves down a row.
+	jcc	render_board_loop_b		; Loop if we haven't shifted all the way out yet
+	
+	; We've shifted all the way out
+	; Move onto the other side of the board
+	dec	render_board_top
+	jeq	render_board_top,	render_board_loop_a	; Move onto bottom half of board
 
 render_board_ret	jmp	0		; Return from subroutine.
 
@@ -433,22 +364,22 @@ gameboard	skip	20
 ;
 ; Gameboard layout (byte.bit):
 ;
-; 1.7 3.7 5.7 7.7 9.7
-; 1.6 3.6 5.6 7.6 9.6
-; 1.5 3.5 5.5 7.5 9.5
-; 1.4 3.4 5.4 7.4 9.4
-; 1.3 3.3 5.3 7.3 9.3
-; 1.2 3.2 5.2 7.2 9.2
-; 1.1 3.1 5.1 7.1 9.1
-; 1.0 3.0 5.0 7.0 9.0
-; 0.7 2.7 4.7 6.7 8.7
-; 0.6 2.6 4.6 6.6 8.6
-; 0.5 2.5 4.5 6.5 8.5
-; 0.4 2.4 4.4 6.4 8.4
-; 0.3 2.3 4.3 6.3 8.3
-; 0.2 2.2 4.2 6.2 8.2
-; 0.1 2.1 4.1 6.1 8.1
-; 0.0 2.0 4.0 6.0 8.0
+; 01.7 03.7 05.7 07.7 09.7 11.7 13.7 15.7 17.7 19.7
+; 01.6 03.6 05.6 07.6 09.6 11.6 13.6 15.6 17.6 19.6
+; 01.5 03.5 05.5 07.5 09.5 11.5 13.5 15.5 17.5 19.5
+; 01.4 03.4 05.4 07.4 09.4 11.4 13.4 15.4 17.4 19.4
+; 01.3 03.3 05.3 07.3 09.3 11.3 13.3 15.3 17.3 19.3
+; 01.2 03.2 05.2 07.2 09.2 11.2 13.2 15.2 17.2 19.2
+; 01.1 03.1 05.1 07.1 09.1 11.1 13.1 15.1 17.1 19.1
+; 01.0 03.0 05.0 07.0 09.0 11.0 13.0 15.0 17.0 19.0
+; 00.7 02.7 04.7 06.7 08.7 10.7 12.7 14.7 16.7 18.7
+; 00.6 02.6 04.6 06.6 08.6 10.6 12.6 14.6 16.6 18.6
+; 00.5 02.5 04.5 06.5 08.5 10.5 12.5 14.5 16.5 18.5
+; 00.4 02.4 04.4 06.4 08.4 10.4 12.4 14.4 16.4 18.4
+; 00.3 02.3 04.3 06.3 08.3 10.3 12.3 14.3 16.3 18.3
+; 00.2 02.2 04.2 06.2 08.2 10.2 12.2 14.2 16.2 18.2
+; 00.1 02.1 04.1 06.1 08.1 10.1 12.1 14.1 16.1 18.1
+; 00.0 02.0 04.0 06.0 08.0 10.0 12.0 14.0 16.0 18.0
 
 
 ; New piece stage
