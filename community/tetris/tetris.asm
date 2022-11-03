@@ -3,7 +3,16 @@
 ;
 ; Run from 0x01.
 ;
+; Completed:
+;
+; * Gameboard format
+; * Gameboard rendering to console
+; * Line clearing
+;
+; ~120 instructions left to implement the rest of TODO.
+;
 ; TODO:
+;
 ;
 ; * Description with controls etc.
 ; * Smarter temporary variable management.
@@ -15,23 +24,20 @@
 
 ; Constants
 ;
-GB_ROWS	equ	20	; Tetris board has 20 rows visible
 
-GB_LO_EMPTY	equ	0x01	; Empty gameboard with a solid boarder on the left edge. X=0, 1st byte bit 0 (LSB).
-GB_HI_EMPTY	equ	0x08	; Empty gameboard with a solid boarder on the right edge. X=11, 2nd byte bit 3.
-
+SPACE_CHAR	equ	0x20	; Space
 BLOCK_CHAR	equ	0x23	; #
-EMPTY_CHAR	equ	0x20	; Space
+EMPTY_CHAR	equ	0x7E 	; ~
 BAR_CHAR	equ	0x7C	; |
 
 CR_CHAR	equ	0x0D	; Carriage Return CR \r
 LF_CHAR	equ	0x0A	; Linefeed LF \n
 
 ; Number constants
-ZERO_CHAR	equ	0x30
+ZERO_CHAR	equ	0x30	; 0
 
 ; Alphabet constants
-A_CHAR	equ	0x41
+A_CHAR	equ	0x41	; A
 B_CHAR	equ	A_CHAR+1
 C_CHAR	equ	A_CHAR+2
 D_CHAR	equ	A_CHAR+3
@@ -58,7 +64,8 @@ X_CHAR	equ	A_CHAR+23
 Y_CHAR	equ	A_CHAR+24
 Z_CHAR	equ	A_CHAR+25
 
-; Additional instructions
+; Additional custom instructions
+; To use these, call them like: insn INCTO_INSN aa, bb
 AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs [aa] and [bb], and stores in [aa].
 INCTO_INSN	equ	0x08200000	; Stores [aa] + 1 --> [bb] in one instruction.
 
@@ -87,38 +94,37 @@ exec	jmp	run	; Jump to start of program
 
 pieces_arr
 
-;; NOTE: Do these need to actually be stored in memory? Or can they be made constants?
-;;       Potential saving of 7 words.
+;; TODO: How do these actually get decoded/used?
 
 ; Real | Bits | Hex
 ;
 ; 1110 | 0111 | 7
 ; 0100 | 0010 | 2
-t_piece	data	0x72
+t_piece	equ	0x72
 
 ; 0110 | 0110 | 6
 ; 1100 | 0011 | 3
-s_piece	data	0x63
+s_piece	equ	0x63
 
 ; 1100 | 0011 | 3
 ; 0110 | 0110 | 6
-z_piece	data	0x36
+z_piece	equ	0x36
 
 ; 0010 | 0100 | 4
 ; 1110 | 0111 | 7
-l_piece	data	0x47
+l_piece	equ	0x47
 
 ; 1110 | 0111 | 7
 ; 0010 | 0100 | 4
-j_piece	data	0x74
+j_piece	equ	0x74
 
 ; 0110 | 0110 | 6
 ; 0110 | 0110 | 6
-o_piece	data	0x66
+o_piece	equ	0x66
 
 ; 1111 | 1111 | F
 ; 0000 | 0000 | 0
-i_piece	data	0xF0
+i_piece	equ	0xF0
 
 
 
@@ -136,32 +142,36 @@ current_y	skip	1
 ; Start of application code
 ;
 run
-	; Setup testing gameboard	
-	st	#FF,	gameboard+0
-	st	#F1,	gameboard+1
-	st	#8F,	gameboard+2
-	st	#FF,	gameboard+3
-	st	#FF,	gameboard+4
-	st	#FF,	gameboard+5
-	st	#FF,	gameboard+6
-	st	#5F,	gameboard+7
-	st	#FF,	gameboard+8
-	st	#FF,	gameboard+9
-	st	#FF,	gameboard+10
-	st	#FF,	gameboard+11
-	st	#FF,	gameboard+12
-	st	#FF,	gameboard+13
-	st	#FF,	gameboard+14
-	st	#FF,	gameboard+15
-	st	#FF,	gameboard+16
-	st	#FF,	gameboard+17
-	st	#FF,	gameboard+18
-	st	#FF,	gameboard+19
-	
+	; Setup testing gameboard
+	; Rotate your head to the left and squint
+	; Top
+	st	#%1111_1111,	gameboard+19
+	st	#%1111_0001,	gameboard+17
+	st	#%1111_1001,	gameboard+15
+	st	#%1111_1101,	gameboard+13
+	st	#%1111_1111,	gameboard+11
+	st	#%1111_1111,	gameboard+9
+	st	#%1111_1101,	gameboard+7
+	st	#%1111_1001,	gameboard+5
+	st	#%1111_0001,	gameboard+3
+	st	#%1111_1111,	gameboard+1
+	; Bottom
+	st	#%0000_1111,	gameboard+18
+	st	#%0001_1111,	gameboard+16
+	st	#%0011_1111,	gameboard+14
+	st	#%0111_1110,	gameboard+12
+	st	#%1111_1100,	gameboard+10
+	st	#%1111_1100,	gameboard+8
+	st	#%0111_1110,	gameboard+6
+	st	#%0011_1111,	gameboard+4
+	st	#%0001_1111,	gameboard+2
+	st	#%0000_1111,	gameboard+0
 	
 	; Print game board
 	jsr	render_board_ret,	render_board
-	halt
+	
+	outc	#CR_CHAR
+	outc	#LF_CHAR
 	
 	; Do line clear
 	jsr	line_clr_ret,	line_clr
@@ -169,61 +179,52 @@ run
 	; Print game board again
 	jsr	render_board_ret,	render_board
 	
+	outc	#CR_CHAR
+	outc	#LF_CHAR
+	
 	; Halt
+	outc	#33	; !
 	halt
-
 
 ; Render board subroutine
 ;
-; Strategy: We are going to render the gameboard from left to right, top to bottom, which allows for the most simple console output (avoids ANSI escape codes).
+; How:
+; Render the gameboard from left to right, top to bottom, to give the most simple console output (avoids ANSI console cursor movement).
 ;
-; SET board offset = 1
-;
-; LOOP A - Starts at top of the board and then switches to bottom half of the board
-; Store the current board byte offset into the board byte index. 1 for the top half of the board, 0 for the bottom half.
-; Prepare a mask for comparison. Store 0x80 in a byte.
-;
-; LOOP B - Works along the the row
-; DO LOOP C
-; Then:
-;    
-
-; LOOP C - Works left to right across the columns
-; Copy the mask into a result variable
-; Indirect AND the current gameboard byte with result variable
-; Print an '#' if the result is > 1, else print ' '
-; 
-; Rotate the mask right.
-; If carry not set, go 
-; If carry is set, we're done with the top half of the board.
+; LOOP A: Starts at top of the board and then switches to bottom half of the board. The gameboard ptr offset changes from 1 to 0.
+; LOOP B: Work down the rows using a single byte bitmask, shifting it right each iteration.
+; LOOP C: Work along the columns from 0 to 10, incrementing the gameboard ptr by 2 each iteration.
+;         Decide whether to render a block or empty character by ANDing the gameboard ptr value with the current bitmask
 
 ; Temporary variables for internal use
-render_board_top	skip	1 ; byte offset to select top or bottom of the board. 1 for top, 0 for bottom.
+render_board_top	skip	1 ; boolean to select top or bottom of the board. 1 for top, 0 for bottom.
 render_board_mask	skip	1 ; The row mask for selecting the row to render
 render_board_col	skip	1 ; The current column iteration. -10 -> 0 (to allow for increment and jump if not zero)
 
 render_board
-; Prep column iterator
 	st	#1,	render_board_top
 render_board_loop_a
-	st	#80,	render_board_mask
+	st	#%1000_0000,	render_board_mask
 render_board_loop_b
 	st	#gameboard,	render_board_ptr
-	addto	render_board_top,	render_board_ptr
-	st	#-10,	render_board_col
+	addto	render_board_top,	render_board_ptr	; Offset the gameboard ptr by 1 if we're rendering the top half
+	st	#-10,	render_board_col	; Prepare column loop counter
 render_board_loop_c
 	clr	tmp
 render_board_ptr	add	tmp,	0	; Load
 	
 	andto	render_board_mask,	tmp
+	
+	; Print a block or an empty cell depending whether the board & mask > 0
 	jne	tmp,	render_board_print_a
-	outc	#ZERO_CHAR
+	outc	#EMPTY_CHAR
 	jmp	render_board_print_b
-render_board_print_a	outc	#ZERO_CHAR+1
+render_board_print_a	outc	#BLOCK_CHAR
 render_board_print_b
 	addto	#2,	render_board_ptr	; Move onto next column byte
 	incjne	render_board_col,	render_board_loop_c	; Row render loop
-
+	
+	; Newline to move down to the next row on the console
 	outc	#CR_CHAR
 	outc	#LF_CHAR
 
@@ -237,115 +238,120 @@ render_board_print_b
 
 render_board_ret	jmp	0		; Return from subroutine.
 
-; Line clear check
+; line_clr
 ;
-; Strategy:
-; AND all of the bytes in the top half of the board together.
-; AND all of the bytes in the bottom half of the board together.
-; This creates a 16 bit bitmask with 1s in the positions of full rows that should be cleared.
+; Clears all full rows from the gameboard.
 ;
-; Column by column, use the bit-shifting algorithm to "delete" bits in positions the bitmask is set to 1.
-
-; For i = -10; i < 0; i++
-line_clr_mask	skip	2
-line_clr_i	skip	1
+; How:
+; 1. Call get_full_lines to generate a bitmask of all the complete rows
+; 2. Call rem_bits on each column in the gameboard with a copy of the complete rows bitmask.
+; 3. Copy the result back over the gameboard.
+;
+line_clr_i	skip	1	; We cannot use tmp as loop counter since we call subroutines which overwrite tmp.
 
 line_clr
-; Prep the result mask
-	st	#255	line_clr_mask+1	; with each of the gameboard columns
-	
-; AND all of the rows together.
-; First do the bottom half of the board (even bytes), then the top half of the board (odd bytes)
+	; Prep work. Ensure rem_bits_value is zeroed.
+	clr	rem_bits_value+0
+	clr	rem_bits_value+1
 
-; Prep the outer loop which switches between the bottom half and top half of the board.
-; Since we don't call any subroutines, it's safe to use tmp for this.
-	st	#-2	tmp
-line_clr_outer_loop	
-	st	#gameboard+2,	line_clr_b_ptr	; Prep the gameboard pointer for the ANDing
-	addto	tmp,	line_clr_b_ptr
+	; Generate the line clear mask. Result in get_full_lines_mask.
+	jsr	get_full_lines_ret,	get_full_lines
+	
+	; TODO: Count and save the number of bits in get_full_lines_mask for scoring
+
+	; Iterate over each column and call the rem_bits subroutine to remove the bits from the column.
 	st	#-10,	line_clr_i	; Prep the loop counter
 
-; The AND result will be calculated into line_clr_mask+1 always.
-; The second (and last) time the outer loop runs, we shift the first value into line_clr_mask+0, and reset line_clr_mask+1.
-; Then line_clr_mask+1 is overwritten by the second loop iteration.
-	st	line_clr_mask+1,	line_clr_mask+0
-	st	#255	line_clr_mask+1
+	; Prepare line_clr_read_ptr_0 ptr to do a load from the gameboard.
+	; Start at -2 since line_clr_read_ptr_0 is pre-incremented by 2 every loop.
+	st	#gameboard-2,	line_clr_read_ptr_0
+	; line_clr_read_ptr_1 is always 1 above line_clr_read_ptr_0 and is calculated on the fly every iteration.
 
-line_clr_col_loop
-; The pointer for the current byte in the gameboard.
-; This is allows for an indirect AND into an accumulator variable.
-line_clr_b_ptr	AND_INSN	line_clr_mask+1,	0
+; Line clear loop. It will call rem_bits with the line clear mask and each column of the gameboard.
+line_clr_loop
+	; Copy the line clear mask into the subroutine mask input.
+	; This needs to be done every iteration since the rem_bits subroutine zeroes rem_bits_mask
+	st	get_full_lines_mask+0,	rem_bits_mask+0
+	st	get_full_lines_mask+1,	rem_bits_mask+1
 
-; Increment the current byte pointer by 2 to move over the bytes that make up the current half of the game board. 
-	addto	#2,	line_clr_b_ptr
-
-line_clr_col_end	incjne	line_clr_i,	line_clr_col_loop	; Inner loop
-line_clr_outer_end	incjne	tmp,	line_clr_outer_loop	; Outer loop
-
-; Now we have a bit mask that contains 1s in all the locations we need to clear lines.
-; Iterate over each column and call the rem_bits subroutine to remove the bits from the column.
-	st	#-10,	line_clr_i	; Prep the loop counter
-
-; Prepare line_clr_col_bot_ptr and line_clr_col_top_ptr pointers to do a load from the gameboard
-	st	#gameboard,	line_clr_col_bot_ptr
-	st	#gameboard+1,	line_clr_col_top_ptr
-
-; This is the line clear loop. It will call rem_bits with the line clear mask and each column of the gameboard.
-line_clr_col2_loop
-; Copy the line clear mask into the subroutine mask input.
-; This needs to be done every iteration since the rem_bits subroutine zeroes rem_bits_mask
-	st	line_clr_mask+0,	rem_bits_mask+0
-	st	line_clr_mask+1,	rem_bits_mask+1
-
-; Copy the current column into the rem_bits subroutine rem_bits_value input
-; Need to indirect load. No need to clear rem_bits_value first since it is zeroed by the subroutine itself.
-line_clr_col_bot_ptr	add	rem_bits_value+0,	0
-line_clr_col_top_ptr	add	rem_bits_value+1,	0
+	; Load the current column into the rem_bits subroutine rem_bits_value input
+	; Iterate pointers into game board
+	addto	#2,	line_clr_read_ptr_0	; Prep ptr +0
+	insn INCTO_INSN	line_clr_read_ptr_0,	line_clr_read_ptr_1	; Prep ptr +1
 	
-; Call the rem_bits subroutine
+	; No need to pre-clear load destination since it is zeroed by the subroutine every iteration.
+	;clr	rem_bits_value+0		; TEST
+	;clr	rem_bits_value+1		; TEST
+line_clr_read_ptr_0	add	rem_bits_value+0,	0	; Load +0
+line_clr_read_ptr_1	add	rem_bits_value+1,	0	; Load +1
+	
+	; Call rem_bits subroutine
 	jsr	rem_bits_ret,	rem_bits
 	
-; Prepare copy back pointers
-	st	line_clr_col_bot_ptr,	line_clr_col_bot_ptr2
-	st	line_clr_col_top_ptr,	line_clr_col_top_ptr2
-; Copy the result back over the column
-line_clr_col_bot_ptr2	st	rem_bits_result+0,	0
-line_clr_col_top_ptr2	st	rem_bits_result+1,	0
-; Update pointers for the next iteration
-	addto	#2,	line_clr_col_bot_ptr
-	addto	#2,	line_clr_col_top_ptr
-; Loop
-	incjne	line_clr_i,	line_clr_col2_loop
+	; Prepare write back pointers (they're the same addresses as the read pointers)
+	st	line_clr_read_ptr_0,	line_clr_write_ptr_0
+	st	line_clr_read_ptr_1,	line_clr_write_ptr_1
+	; Copy the result back into the gameboard
+line_clr_write_ptr_0	st	rem_bits_result+0,	0
+line_clr_write_ptr_1	st	rem_bits_result+1,	0
 
+	incjne	line_clr_i,	line_clr_loop	; Loop
 line_clr_ret	jmp	0		; Return from subroutine
+
+; get_full_lines
+;
+; Generates a 2 byte, 16 bit bitmask indicating which rows in the gameboard are filled.
+; This is the bitwise AND of all columns in the gameboard.
+;
+get_full_lines_mask	skip	2
+
+get_full_lines
+	st	#-10,	tmp
+	st	#0xFF,	get_full_lines_mask+0
+	st	#0xFF,	get_full_lines_mask+1
+	st	#gameboard-2,	get_full_lines_ptr_0
+get_full_lines_loop
+	addto	#2,	get_full_lines_ptr_0
+	insn INCTO_INSN	get_full_lines_ptr_0,	get_full_lines_ptr_1
+get_full_lines_ptr_0	insn AND_INSN	get_full_lines_mask+0,	0
+get_full_lines_ptr_1	insn AND_INSN	get_full_lines_mask+1,	0
+	
+	incjne	tmp,	get_full_lines_loop
+get_full_lines_ret	jmp	0		; Return from subroutine
 
 ; rem_bits
 ;
-; Remove the bits from rem_bits_val in the positions they are set in rem_bits_mask.
-; For each bit removed, the more significant bits are shifted downwards to fill its place.
-; The most significant bits are filled with zeroes.
+; Remove the bits from rem_bits_value in the positions they are set in rem_bits_mask.
+; For each bit removed, the more significant bits are shifted right to fill its place.
+; The leftmost most significant bits are filled with zeroes.
+;
 ; The output is placed in rem_bits_result.
+; rem_bits_mask and rem_bits_value are zeroed as a result of the process.
 ;
 rem_bits_mask	skip	2
 rem_bits_value	skip	2
 rem_bits_result	skip	2
 rem_bits
+	; Pre-clear the result
+	clr	rem_bits_result+0
+	clr	rem_bits_result+1
+
 	st	#-16,	tmp	; Loop 16 times
 rem_bits_loop
 	lsl	rem_bits_mask+0		; Logical shift left mask (0 -> bit 0)
 	rol	rem_bits_mask+1		; (bit 15 -> carry)
 	jcc	rem_bits_A		; GOTO A if carry clear
 	; If Carry Set
-	lsl	rem_bits_value+0		; Logical shift left value
-	rol	rem_bits_value+1
-	jmp	rem_bits_end
-rem_bits_A	; Else
+	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
+	rol	rem_bits_value+1		; The carry result is discarded.
+	jmp	rem_bits_loop_end
+rem_bits_A	; If Carry Clear
 	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
 	rol	rem_bits_value+1		; (bit 15 -> carry)
-	rol	rem_bits_result+0		; Rotate left into result (carry -> bit 0)
-	rol	rem_bits_result+1		; (bit 15-> carry)
-rem_bits_end	incjne	tmp,	rem_bits_loop	; Loop
-rem_bits_ret	jmp	0		; Return
+	rol	rem_bits_result+0		; Rotate left to save the carry into result (carry -> bit 0)
+	rol	rem_bits_result+1		; Carry from rotating result is discarded.
+rem_bits_loop_end	incjne	tmp,	rem_bits_loop	; Loop
+rem_bits_ret	jmp	0		; Return from subroutine
 
 
 
@@ -356,31 +362,34 @@ gameboard	skip	20
 ; The gameboard is made up of bytes stacked vertically.
 ; There are two bytes end to end for each column, 10 colums wide.
 ; This makes a 16x10 game board, totalling 20 bytes.
-; The lower address, even index byte is at the bottom of the board, the higher address, odd index byte is at the top.
+; The lower, even index byte is at the bottom of the board. The higher, odd index byte is at the top.
 ; The less significant bits in each byte are towards the bottom of the board, the higher significant bits are towards the top.
 ;
 ; Ideally we would use three bytes per row to make a 24x10 gameboard in 30 bytes,
-; but we simply don't have the room for it.
+; but this increases both gameboard storage size and the code required to deal with it.
 ;
 ; Gameboard layout (byte.bit):
 ;
-; 01.7 03.7 05.7 07.7 09.7 11.7 13.7 15.7 17.7 19.7
-; 01.6 03.6 05.6 07.6 09.6 11.6 13.6 15.6 17.6 19.6
-; 01.5 03.5 05.5 07.5 09.5 11.5 13.5 15.5 17.5 19.5
-; 01.4 03.4 05.4 07.4 09.4 11.4 13.4 15.4 17.4 19.4
-; 01.3 03.3 05.3 07.3 09.3 11.3 13.3 15.3 17.3 19.3
-; 01.2 03.2 05.2 07.2 09.2 11.2 13.2 15.2 17.2 19.2
-; 01.1 03.1 05.1 07.1 09.1 11.1 13.1 15.1 17.1 19.1
-; 01.0 03.0 05.0 07.0 09.0 11.0 13.0 15.0 17.0 19.0
-; 00.7 02.7 04.7 06.7 08.7 10.7 12.7 14.7 16.7 18.7
-; 00.6 02.6 04.6 06.6 08.6 10.6 12.6 14.6 16.6 18.6
-; 00.5 02.5 04.5 06.5 08.5 10.5 12.5 14.5 16.5 18.5
-; 00.4 02.4 04.4 06.4 08.4 10.4 12.4 14.4 16.4 18.4
-; 00.3 02.3 04.3 06.3 08.3 10.3 12.3 14.3 16.3 18.3
-; 00.2 02.2 04.2 06.2 08.2 10.2 12.2 14.2 16.2 18.2
-; 00.1 02.1 04.1 06.1 08.1 10.1 12.1 14.1 16.1 18.1
-; 00.0 02.0 04.0 06.0 08.0 10.0 12.0 14.0 16.0 18.0
+; 1.7 3.7 5.7 7.7 9.7 11.7 13.7 15.7 17.7 19.7
+; 1.6 3.6 5.6 7.6 9.6 11.6 13.6 15.6 17.6 19.6
+; 1.5 3.5 5.5 7.5 9.5 11.5 13.5 15.5 17.5 19.5
+; 1.4 3.4 5.4 7.4 9.4 11.4 13.4 15.4 17.4 19.4
+; 1.3 3.3 5.3 7.3 9.3 11.3 13.3 15.3 17.3 19.3
+; 1.2 3.2 5.2 7.2 9.2 11.2 13.2 15.2 17.2 19.2
+; 1.1 3.1 5.1 7.1 9.1 11.1 13.1 15.1 17.1 19.1
+; 1.0 3.0 5.0 7.0 9.0 11.0 13.0 15.0 17.0 19.0
+; 0.7 2.7 4.7 6.7 8.7 10.7 12.7 14.7 16.7 18.7
+; 0.6 2.6 4.6 6.6 8.6 10.6 12.6 14.6 16.6 18.6
+; 0.5 2.5 4.5 6.5 8.5 10.5 12.5 14.5 16.5 18.5
+; 0.4 2.4 4.4 6.4 8.4 10.4 12.4 14.4 16.4 18.4
+; 0.3 2.3 4.3 6.3 8.3 10.3 12.3 14.3 16.3 18.3
+; 0.2 2.2 4.2 6.2 8.2 10.2 12.2 14.2 16.2 18.2
+; 0.1 2.1 4.1 6.1 8.1 10.1 12.1 14.1 16.1 18.1
+; 0.0 2.0 4.0 6.0 8.0 10.0 12.0 14.0 16.0 18.0
 
 
 ; New piece stage
 ; TODO
+
+; Placeholder label to easily see how big the program is from the symbol table
+END_OF_PROGRAM

@@ -1,17 +1,6 @@
 ; Pass 1...
-; tetris.asm:142: error: Missing second operand
-; tetris.asm:142: error: Extra junk at end of line 'F,	gameboard+2'
-; tetris.asm:147: error: Missing second operand
-; tetris.asm:147: error: Extra junk at end of line 'F,	gameboard+7'
-; tetris.asm:255: error: Missing second operand
-; tetris.asm:255: error: Extra junk at end of line 'line_clr_mask+1	; with each of the gameboard columns'
-; tetris.asm:262: error: Missing second operand
-; tetris.asm:262: error: Extra junk at end of line 'tmp'
-; tetris.asm:272: error: Missing second operand
-; tetris.asm:272: error: Extra junk at end of line 'line_clr_mask+1'
-; tetris.asm:277: error: Unknown instruction 'AND_INSN'
 
-; 11 errors detected in pass 1
+; 0 errors detected in pass 1
 
 ; Pass 2...
 ; 1                       ; Tetris implementation
@@ -19,386 +8,337 @@
 ; 3                       ;
 ; 4                       ; Run from 0x01.
 ; 5                       ;
-; 6                       ; TODO:
+; 6                       ; Completed:
 ; 7                       ;
-; 8                       ; * Description with controls etc.
-; 9                       ; * Smarter temporary variable management.
-; 10                      ;       Define a small section of memory to use like a shared register pool.
-; 11                      ;       Go through the subroutines and replace dedicated temporary variables with shared variables from the register pool that haven't been used yet in the execution flow.
-; 12                      ;       Also inline most subroutines, most are called from a single spot.
-; 13                      
-; 14                      ;
-; 15                      
-; 16                      ; Constants
-; 17                      ;
-; 18      0000_0000       GB_ROWS	equ	20	; Tetris board has 20 rows visible
-; 19                      
-; 20      0000_0000       GB_LO_EMPTY	equ	0x01	; Empty gameboard with a solid boarder on the left edge. X=0, 1st byte bit 0 (LSB).
-; 21      0000_0000       GB_HI_EMPTY	equ	0x08	; Empty gameboard with a solid boarder on the right edge. X=11, 2nd byte bit 3.
+; 8                       ; * Gameboard format
+; 9                       ; * Gameboard rendering to console
+; 10                      ; * Line clearing
+; 11                      ;
+; 12                      ; ~120 instructions left to implement the rest of TODO.
+; 13                      ;
+; 14                      ; TODO:
+; 15                      ;
+; 16                      ;
+; 17                      ; * Description with controls etc.
+; 18                      ; * Smarter temporary variable management.
+; 19                      ;       Define a small section of memory to use like a shared register pool.
+; 20                      ;       Go through the subroutines and replace dedicated temporary variables with shared variables from the register pool that haven't been used yet in the execution flow.
+; 21                      ;       Also inline most subroutines, most are called from a single spot.
 ; 22                      
-; 23      0000_0000       BLOCK_CHAR	equ	0x23	; #
-; 24      0000_0000       EMPTY_CHAR	equ	0x20	; Space
-; 25      0000_0000       BAR_CHAR	equ	0x7C	; |
-; 26                      
-; 27      0000_0000       CR_CHAR	equ	0x0D	; Carriage Return CR \r
-; 28      0000_0000       LF_CHAR	equ	0x0A	; Linefeed LF \n
-; 29                      
-; 30                      ; Number constants
-; 31      0000_0000       ZERO_CHAR	equ	0x30
+; 23                      ;
+; 24                      
+; 25                      ; Constants
+; 26                      ;
+; 27                      
+; 28      0000_0000       SPACE_CHAR	equ	0x20	; Space
+; 29      0000_0000       BLOCK_CHAR	equ	0x23	; #
+; 30      0000_0000       EMPTY_CHAR	equ	0x7E 	; ~
+; 31      0000_0000       BAR_CHAR	equ	0x7C	; |
 ; 32                      
-; 33                      ; Alphabet constants
-; 34      0000_0000       A_CHAR	equ	0x41
-; 35      0000_0000       B_CHAR	equ	A_CHAR+1
-; 36      0000_0000       C_CHAR	equ	A_CHAR+2
-; 37      0000_0000       D_CHAR	equ	A_CHAR+3
-; 38      0000_0000       E_CHAR	equ	A_CHAR+4
-; 39      0000_0000       F_CHAR	equ	A_CHAR+5
-; 40      0000_0000       G_CHAR	equ	A_CHAR+6
-; 41      0000_0000       H_CHAR	equ	A_CHAR+7
-; 42      0000_0000       I_CHAR	equ	A_CHAR+8
-; 43      0000_0000       J_CHAR	equ	A_CHAR+9
-; 44      0000_0000       K_CHAR	equ	A_CHAR+10
-; 45      0000_0000       L_CHAR	equ	A_CHAR+11
-; 46      0000_0000       M_CHAR	equ	A_CHAR+12
-; 47      0000_0000       N_CHAR	equ	A_CHAR+13
-; 48      0000_0000       O_CHAR	equ	A_CHAR+14
-; 49      0000_0000       P_CHAR	equ	A_CHAR+15
-; 50      0000_0000       Q_CHAR	equ	A_CHAR+16
-; 51      0000_0000       R_CHAR	equ	A_CHAR+17
-; 52      0000_0000       S_CHAR	equ	A_CHAR+18
-; 53      0000_0000       T_CHAR	equ	A_CHAR+19
-; 54      0000_0000       U_CHAR	equ	A_CHAR+20
-; 55      0000_0000       V_CHAR	equ	A_CHAR+21
-; 56      0000_0000       W_CHAR	equ	A_CHAR+22
-; 57      0000_0000       X_CHAR	equ	A_CHAR+23
-; 58      0000_0000       Y_CHAR	equ	A_CHAR+24
-; 59      0000_0000       Z_CHAR	equ	A_CHAR+25
-; 60                      
-; 61                      ; Additional instructions
-; 62      0000_0000       AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs [aa] and [bb], and stores in [aa].
-; 63      0000_0000       INCTO_INSN	equ	0x08200000	; Stores [aa] + 1 --> [bb] in one instruction.
-; 64                      
-; 65                      ; Catch for any jumps to null (0x00). This usually indicates a subroutine hasn't had its return address set.
-; 66                      ;
-; 67                      ; Also used as a temporary storage register, and sometimes as the return value for subroutines that only need to return a status.
-; 68                      
-; 69      00              	org	0x00
-; 70      00 c810_ff00    tmp	halt
+; 33      0000_0000       CR_CHAR	equ	0x0D	; Carriage Return CR \r
+; 34      0000_0000       LF_CHAR	equ	0x0A	; Linefeed LF \n
+; 35                      
+; 36                      ; Number constants
+; 37      0000_0000       ZERO_CHAR	equ	0x30	; 0
+; 38                      
+; 39                      ; Alphabet constants
+; 40      0000_0000       A_CHAR	equ	0x41	; A
+; 41      0000_0000       B_CHAR	equ	A_CHAR+1
+; 42      0000_0000       C_CHAR	equ	A_CHAR+2
+; 43      0000_0000       D_CHAR	equ	A_CHAR+3
+; 44      0000_0000       E_CHAR	equ	A_CHAR+4
+; 45      0000_0000       F_CHAR	equ	A_CHAR+5
+; 46      0000_0000       G_CHAR	equ	A_CHAR+6
+; 47      0000_0000       H_CHAR	equ	A_CHAR+7
+; 48      0000_0000       I_CHAR	equ	A_CHAR+8
+; 49      0000_0000       J_CHAR	equ	A_CHAR+9
+; 50      0000_0000       K_CHAR	equ	A_CHAR+10
+; 51      0000_0000       L_CHAR	equ	A_CHAR+11
+; 52      0000_0000       M_CHAR	equ	A_CHAR+12
+; 53      0000_0000       N_CHAR	equ	A_CHAR+13
+; 54      0000_0000       O_CHAR	equ	A_CHAR+14
+; 55      0000_0000       P_CHAR	equ	A_CHAR+15
+; 56      0000_0000       Q_CHAR	equ	A_CHAR+16
+; 57      0000_0000       R_CHAR	equ	A_CHAR+17
+; 58      0000_0000       S_CHAR	equ	A_CHAR+18
+; 59      0000_0000       T_CHAR	equ	A_CHAR+19
+; 60      0000_0000       U_CHAR	equ	A_CHAR+20
+; 61      0000_0000       V_CHAR	equ	A_CHAR+21
+; 62      0000_0000       W_CHAR	equ	A_CHAR+22
+; 63      0000_0000       X_CHAR	equ	A_CHAR+23
+; 64      0000_0000       Y_CHAR	equ	A_CHAR+24
+; 65      0000_0000       Z_CHAR	equ	A_CHAR+25
+; 66                      
+; 67                      ; Additional custom instructions
+; 68                      ; To use these, call them like: insn INCTO_INSN aa, bb
+; 69      0000_0000       AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs [aa] and [bb], and stores in [aa].
+; 70      0000_0000       INCTO_INSN	equ	0x08200000	; Stores [aa] + 1 --> [bb] in one instruction.
 ; 71                      
-; 72                      ; ENTRY POINT
-; 73      01              	org	0x01
-; 74      01 4018_ff0e    exec	jmp	run	; Jump to start of program
+; 72                      ; Catch for any jumps to null (0x00). This usually indicates a subroutine hasn't had its return address set.
+; 73                      ;
+; 74                      ; Also used as a temporary storage register, and sometimes as the return value for subroutines that only need to return a status.
 ; 75                      
-; 76                      
-; 77                      ; Pieces templates
-; 78                      ;
-; 79                      ; Piece patterns are stored as a single byte,	represening the piece in its starting/0 pose.
-; 80                      ; The byte makes up two rows of 4 colums,	which is enough to fit every kind of piece lying "flat".
-; 81                      ;
-; 82                      ; Bits 0-3 are the bottom row,	bits 4-7 are the top row.
-; 83                      ; The LSB of the row is the _leftmost_ square,	so pieces are rendered left to right LSB to RSB.
-; 84                      ; This is the left to right mirror of the way that bits are normally written out
-; 85                      ; left to right RSB to LSB,	so take care.
-; 86                      ;
-; 87                      
-; 89                      
-; 90                      ;; NOTE: Do these need to actually be stored in memory? Or can they be made constants?
-; 91                      ;;       Potential saving of 7 words.
-; 92                      
-; 93                      ; Real | Bits | Hex
-; 94                      ;
-; 95                      ; 1110 | 0111 | 7
-; 96                      ; 0100 | 0010 | 2
-; 97      02 c810_ff72    t_piece	data	0x72
+; 76      00              	org	0x00
+; 77      00 c810_ff00    tmp	halt
+; 78                      
+; 79                      ; ENTRY POINT
+; 80      01              	org	0x01
+; 81      01 4018_ff07    exec	jmp	run	; Jump to start of program
+; 82                      
+; 83                      
+; 84                      ; Pieces templates
+; 85                      ;
+; 86                      ; Piece patterns are stored as a single byte,	represening the piece in its starting/0 pose.
+; 87                      ; The byte makes up two rows of 4 colums,	which is enough to fit every kind of piece lying "flat".
+; 88                      ;
+; 89                      ; Bits 0-3 are the bottom row,	bits 4-7 are the top row.
+; 90                      ; The LSB of the row is the _leftmost_ square,	so pieces are rendered left to right LSB to RSB.
+; 91                      ; This is the left to right mirror of the way that bits are normally written out
+; 92                      ; left to right RSB to LSB,	so take care.
+; 93                      ;
+; 94                      
+; 96                      
+; 97                      ;; TODO: How do these actually get decoded/used?
 ; 98                      
-; 99                      ; 0110 | 0110 | 6
-; 100                     ; 1100 | 0011 | 3
-; 101     03 c810_ff63    s_piece	data	0x63
-; 102                     
-; 103                     ; 1100 | 0011 | 3
-; 104                     ; 0110 | 0110 | 6
-; 105     04 c810_ff36    z_piece	data	0x36
-; 106                     
-; 107                     ; 0010 | 0100 | 4
-; 108                     ; 1110 | 0111 | 7
-; 109     05 c810_ff47    l_piece	data	0x47
-; 110                     
-; 111                     ; 1110 | 0111 | 7
-; 112                     ; 0010 | 0100 | 4
-; 113     06 c810_ff74    j_piece	data	0x74
-; 114                     
-; 115                     ; 0110 | 0110 | 6
-; 116                     ; 0110 | 0110 | 6
-; 117     07 c810_ff66    o_piece	data	0x66
-; 118                     
-; 119                     ; 1111 | 1111 | F
-; 120                     ; 0000 | 0000 | 0
-; 121     08 c810_fff0    i_piece	data	0xF0
-; 122                     
-; 123                     
+; 99                      ; Real | Bits | Hex
+; 100                     ;
+; 101                     ; 1110 | 0111 | 7
+; 102                     ; 0100 | 0010 | 2
+; 103     0000_0002       t_piece	equ	0x72
+; 104                     
+; 105                     ; 0110 | 0110 | 6
+; 106                     ; 1100 | 0011 | 3
+; 107     0000_0002       s_piece	equ	0x63
+; 108                     
+; 109                     ; 1100 | 0011 | 3
+; 110                     ; 0110 | 0110 | 6
+; 111     0000_0002       z_piece	equ	0x36
+; 112                     
+; 113                     ; 0010 | 0100 | 4
+; 114                     ; 1110 | 0111 | 7
+; 115     0000_0002       l_piece	equ	0x47
+; 116                     
+; 117                     ; 1110 | 0111 | 7
+; 118                     ; 0010 | 0100 | 4
+; 119     0000_0002       j_piece	equ	0x74
+; 120                     
+; 121                     ; 0110 | 0110 | 6
+; 122                     ; 0110 | 0110 | 6
+; 123     0000_0002       o_piece	equ	0x66
 ; 124                     
-; 125                     ; Game state
-; 126                     ;
-; 127     09              lines_cleared	skip	1
+; 125                     ; 1111 | 1111 | F
+; 126                     ; 0000 | 0000 | 0
+; 127     0000_0002       i_piece	equ	0xF0
 ; 128                     
-; 129     0a              current_piece	skip	1
-; 130     0b              current_pose	skip	1
-; 131     0c              current_x	skip	1
-; 132     0d              current_y	skip	1
-; 133                     
+; 129                     
+; 130                     
+; 131                     ; Game state
+; 132                     ;
+; 133     02              lines_cleared	skip	1
 ; 134                     
-; 135                     
-; 136                     ; Start of application code
-; 137                     ;
-; tetris.asm:140: error: Undefined symbol 'FF'
-; 140     0e 4800_006f    	st	#FF,	gameboard+0
-; tetris.asm:141: error: Undefined symbol 'F1'
-; 141     0f 4800_0070    	st	#F1,	gameboard+1
-; tetris.asm:142: error: Missing second operand
-; 142     10 4800_0800    	st	#8F,	gameboard+2
-; tetris.asm:142: error: Extra junk at end of line 'F,	gameboard+2'
-; tetris.asm:143: error: Undefined symbol 'FF'
-; 143     11 4800_0072    	st	#FF,	gameboard+3
-; tetris.asm:144: error: Undefined symbol 'FF'
-; 144     12 4800_0073    	st	#FF,	gameboard+4
-; tetris.asm:145: error: Undefined symbol 'FF'
-; 145     13 4800_0074    	st	#FF,	gameboard+5
-; tetris.asm:146: error: Undefined symbol 'FF'
-; 146     14 4800_0075    	st	#FF,	gameboard+6
-; tetris.asm:147: error: Missing second operand
-; 147     15 4800_0500    	st	#5F,	gameboard+7
-; tetris.asm:147: error: Extra junk at end of line 'F,	gameboard+7'
-; tetris.asm:148: error: Undefined symbol 'FF'
-; 148     16 4800_0077    	st	#FF,	gameboard+8
-; tetris.asm:149: error: Undefined symbol 'FF'
-; 149     17 4800_0078    	st	#FF,	gameboard+9
-; tetris.asm:150: error: Undefined symbol 'FF'
-; 150     18 4800_0079    	st	#FF,	gameboard+10
-; tetris.asm:151: error: Undefined symbol 'FF'
-; 151     19 4800_007a    	st	#FF,	gameboard+11
-; tetris.asm:152: error: Undefined symbol 'FF'
-; 152     1a 4800_007b    	st	#FF,	gameboard+12
-; tetris.asm:153: error: Undefined symbol 'FF'
-; 153     1b 4800_007c    	st	#FF,	gameboard+13
-; tetris.asm:154: error: Undefined symbol 'FF'
-; 154     1c 4800_007d    	st	#FF,	gameboard+14
-; tetris.asm:155: error: Undefined symbol 'FF'
-; 155     1d 4800_007e    	st	#FF,	gameboard+15
-; tetris.asm:156: error: Undefined symbol 'FF'
-; 156     1e 4800_007f    	st	#FF,	gameboard+16
-; tetris.asm:157: error: Undefined symbol 'FF'
-; 157     1f 4800_0080    	st	#FF,	gameboard+17
-; tetris.asm:158: error: Undefined symbol 'FF'
-; 158     20 4800_0081    	st	#FF,	gameboard+18
-; tetris.asm:159: error: Undefined symbol 'FF'
-; 159     21 4800_0082    	st	#FF,	gameboard+19
-; 163     22 8408_3e2a    	jsr	render_board_ret,	render_board
-; 164     23 c810_ff00    	halt
-; 167     24 8408_5b42    	jsr	line_clr_ret,	line_clr
-; 170     25 8408_3e2a    	jsr	render_board_ret,	render_board
-; 173     26 c810_ff00    	halt
-; 174                     
-; 175                     
-; 176                     ; Render board subroutine
-; 177                     ;
-; 178                     ; Strategy: We are going to render the gameboard from left to right, top to bottom, which allows for the most simple console output (avoids ANSI escape codes).
-; 179                     ;
-; 180                     ; SET board offset = 1
-; 181                     ;
-; 182                     ; LOOP A - Starts at top of the board and then switches to bottom half of the board
-; 183                     ; Store the current board byte offset into the board byte index. 1 for the top half of the board, 0 for the bottom half.
-; 184                     ; Prepare a mask for comparison. Store 0x80 in a byte.
-; 185                     ;
-; 186                     ; LOOP B - Works along the the row
-; 187                     ; DO LOOP C
-; 188                     ; Then:
-; 189                     ;    
-; 190                     
-; 191                     ; LOOP C - Works left to right across the columns
-; 192                     ; Copy the mask into a result variable
-; 193                     ; Indirect AND the current gameboard byte with result variable
-; 194                     ; Print an '#' if the result is > 1, else print ' '
-; 195                     ; 
-; 196                     ; Rotate the mask right.
-; 197                     ; If carry not set, go 
-; 198                     ; If carry is set, we're done with the top half of the board.
-; 199                     
-; 200                     ; Temporary variables for internal use
-; 201     27              render_board_top	skip	1 ; byte offset to select top or bottom of the board. 1 for top, 0 for bottom.
-; 202     28              render_board_mask	skip	1 ; The row mask for selecting the row to render
-; 203     29              render_board_col	skip	1 ; The current column iteration. -10 -> 0 (to allow for increment and jump if not zero)
-; 204                     
-; 206                     ; Prep column iterator
-; 207     2a 4800_0127    	st	#1,	render_board_top
-; 209     2b 4800_5028    	st	#80,	render_board_mask
-; 211     2c 4800_6f30    	st	#gameboard,	render_board_ptr
-; 212     2d 0880_2730    	addto	render_board_top,	render_board_ptr
-; 213     2e 4800_f629    	st	#-10,	render_board_col
-; 215     2f 4800_0000    	clr	tmp
-; 216     30 8080_0000    render_board_ptr	add	tmp,	0	; Load
-; 218     31 0980_2800    	andto	render_board_mask,	tmp
-; 219     32 006a_0035    	jne	tmp,	render_board_print_a
-; 220     33 d800_3000    	outc	#ZERO_CHAR
-; 221     34 4018_ff36    	jmp	render_board_print_b
-; 222     35 d800_3100    render_board_print_a	outc	#ZERO_CHAR+1
-; 224     36 4880_0230    	addto	#2,	render_board_ptr	; Move onto next column byte
-; 225     37 802a_292f    	incjne	render_board_col,	render_board_loop_c	; Row render loop
-; 226                     
-; 227     38 d800_0d00    	outc	#CR_CHAR
-; 228     39 d800_0a00    	outc	#LF_CHAR
-; 229                     
-; 230     3a 0a00_2828    	lsr	render_board_mask		; Logical shift right (0 into top spot). This moves down a row.
-; 231     3b 0064_002c    	jcc	render_board_loop_b		; Loop if we haven't shifted all the way out yet
-; 235     3c 48e0_0127    	dec	render_board_top
-; 236     3d 0062_272b    	jeq	render_board_top,	render_board_loop_a	; Move onto bottom half of board
-; 237                     
-; 238     3e 4018_ff00    render_board_ret	jmp	0		; Return from subroutine.
-; 239                     
-; 240                     ; Line clear check
-; 241                     ;
-; 242                     ; Strategy:
-; 243                     ; AND all of the bytes in the top half of the board together.
-; 244                     ; AND all of the bytes in the bottom half of the board together.
-; 245                     ; This creates a 16 bit bitmask with 1s in the positions of full rows that should be cleared.
-; 246                     ;
-; 247                     ; Column by column, use the bit-shifting algorithm to "delete" bits in positions the bitmask is set to 1.
-; 248                     
-; 249                     ; For i = -10; i < 0; i++
-; 250     3f              line_clr_mask	skip	2
-; 251     41              line_clr_i	skip	1
-; 252                     
-; 254                     ; Prep the result mask
-; tetris.asm:255: error: Missing second operand
-; 255     42 4800_ff00    	st	#255	line_clr_mask+1	; with each of the gameboard columns
-; tetris.asm:255: error: Extra junk at end of line 'line_clr_mask+1	; with each of the gameboard columns'
-; 257                     ; AND all of the rows together.
-; 258                     ; First do the bottom half of the board (even bytes), then the top half of the board (odd bytes)
-; 259                     
-; 260                     ; Prep the outer loop which switches between the bottom half and top half of the board.
-; 261                     ; Since we don't call any subroutines, it's safe to use tmp for this.
-; tetris.asm:262: error: Missing second operand
-; 262     43 4800_fe00    	st	#-2	tmp
-; tetris.asm:262: error: Extra junk at end of line 'tmp'
-; 264     44 4800_7149    	st	#gameboard+2,	line_clr_b_ptr	; Prep the gameboard pointer for the ANDing
-; 265     45 0880_0049    	addto	tmp,	line_clr_b_ptr
-; 266     46 4800_f641    	st	#-10,	line_clr_i	; Prep the loop counter
-; 267                     
-; 268                     ; The AND result will be calculated into line_clr_mask+1 always.
-; 269                     ; The second (and last) time the outer loop runs, we shift the first value into line_clr_mask+0, and reset line_clr_mask+1.
-; 270                     ; Then line_clr_mask+1 is overwritten by the second loop iteration.
-; 271     47 0800_403f    	st	line_clr_mask+1,	line_clr_mask+0
-; tetris.asm:272: error: Missing second operand
-; 272     48 4800_ff00    	st	#255	line_clr_mask+1
-; tetris.asm:272: error: Extra junk at end of line 'line_clr_mask+1'
-; 273                     
-; 275                     ; The pointer for the current byte in the gameboard.
-; 276                     ; This is allows for an indirect AND into an accumulator variable.
-; tetris.asm:277: error: Unknown instruction 'AND_INSN'
-; 277                     line_clr_b_ptr	AND_INSN	line_clr_mask+1,	0
-; 278                     
-; 279                     ; Increment the current byte pointer by 2 to move over the bytes that make up the current half of the game board. 
-; 280     49 4880_0249    	addto	#2,	line_clr_b_ptr
-; 281                     
-; 282     4a 802a_4149    line_clr_col_end	incjne	line_clr_i,	line_clr_col_loop	; Inner loop
-; 283     4b 802a_0044    line_clr_outer_end	incjne	tmp,	line_clr_outer_loop	; Outer loop
-; 284                     
-; 285                     ; Now we have a bit mask that contains 1s in all the locations we need to clear lines.
-; 286                     ; Iterate over each column and call the rem_bits subroutine to remove the bits from the column.
-; 287     4c 4800_f641    	st	#-10,	line_clr_i	; Prep the loop counter
-; 288                     
-; 289                     ; Prepare line_clr_col_bot_ptr and line_clr_col_top_ptr pointers to do a load from the gameboard
-; 290     4d 4800_6f51    	st	#gameboard,	line_clr_col_bot_ptr
-; 291     4e 4800_7052    	st	#gameboard+1,	line_clr_col_top_ptr
-; 292                     
-; 293                     ; This is the line clear loop. It will call rem_bits with the line clear mask and each column of the gameboard.
-; 295                     ; Copy the line clear mask into the subroutine mask input.
-; 296                     ; This needs to be done every iteration since the rem_bits subroutine zeroes rem_bits_mask
-; 297     4f 0800_3f5c    	st	line_clr_mask+0,	rem_bits_mask+0
-; 298     50 0800_405d    	st	line_clr_mask+1,	rem_bits_mask+1
-; 299                     
-; 300                     ; Copy the current column into the rem_bits subroutine rem_bits_value input
-; 301                     ; Need to indirect load. No need to clear rem_bits_value first since it is zeroed by the subroutine itself.
-; 302     51 8080_5e00    line_clr_col_bot_ptr	add	rem_bits_value+0,	0
-; 303     52 8080_5f00    line_clr_col_top_ptr	add	rem_bits_value+1,	0
-; 305                     ; Call the rem_bits subroutine
-; 306     53 8408_6e62    	jsr	rem_bits_ret,	rem_bits
-; 308                     ; Prepare copy back pointers
-; 309     54 0800_5156    	st	line_clr_col_bot_ptr,	line_clr_col_bot_ptr2
-; 310     55 0800_5257    	st	line_clr_col_top_ptr,	line_clr_col_top_ptr2
-; 311                     ; Copy the result back over the column
-; 312     56 0800_6000    line_clr_col_bot_ptr2	st	rem_bits_result+0,	0
-; 313     57 0800_6100    line_clr_col_top_ptr2	st	rem_bits_result+1,	0
-; 314                     ; Update pointers for the next iteration
-; 315     58 4880_0251    	addto	#2,	line_clr_col_bot_ptr
-; 316     59 4880_0252    	addto	#2,	line_clr_col_top_ptr
-; 317                     ; Loop
-; 318     5a 802a_414f    	incjne	line_clr_i,	line_clr_col2_loop
-; 319                     
-; 320     5b 4018_ff00    line_clr_ret	jmp	0		; Return from subroutine
+; 135     03              current_piece	skip	1
+; 136     04              current_pose	skip	1
+; 137     05              current_x	skip	1
+; 138     06              current_y	skip	1
+; 139                     
+; 140                     
+; 141                     
+; 142                     ; Start of application code
+; 143                     ;
+; 148     07 4800_ff83    	st	#%1111_1111,	gameboard+19
+; 149     08 4800_f181    	st	#%1111_0001,	gameboard+17
+; 150     09 4800_f97f    	st	#%1111_1001,	gameboard+15
+; 151     0a 4800_fd7d    	st	#%1111_1101,	gameboard+13
+; 152     0b 4800_ff7b    	st	#%1111_1111,	gameboard+11
+; 153     0c 4800_ff79    	st	#%1111_1111,	gameboard+9
+; 154     0d 4800_fd77    	st	#%1111_1101,	gameboard+7
+; 155     0e 4800_f975    	st	#%1111_1001,	gameboard+5
+; 156     0f 4800_f173    	st	#%1111_0001,	gameboard+3
+; 157     10 4800_ff71    	st	#%1111_1111,	gameboard+1
+; 159     11 4800_0f82    	st	#%0000_1111,	gameboard+18
+; 160     12 4800_1f80    	st	#%0001_1111,	gameboard+16
+; 161     13 4800_3f7e    	st	#%0011_1111,	gameboard+14
+; 162     14 4800_7e7c    	st	#%0111_1110,	gameboard+12
+; 163     15 4800_fc7a    	st	#%1111_1100,	gameboard+10
+; 164     16 4800_fc78    	st	#%1111_1100,	gameboard+8
+; 165     17 4800_7e76    	st	#%0111_1110,	gameboard+6
+; 166     18 4800_3f74    	st	#%0011_1111,	gameboard+4
+; 167     19 4800_1f72    	st	#%0001_1111,	gameboard+2
+; 168     1a 4800_0f70    	st	#%0000_1111,	gameboard+0
+; 171     1b 8408_3b27    	jsr	render_board_ret,	render_board
+; 173     1c d800_0d00    	outc	#CR_CHAR
+; 174     1d d800_0a00    	outc	#LF_CHAR
+; 177     1e 8408_4e3d    	jsr	line_clr_ret,	line_clr
+; 180     1f 8408_3b27    	jsr	render_board_ret,	render_board
+; 182     20 d800_0d00    	outc	#CR_CHAR
+; 183     21 d800_0a00    	outc	#LF_CHAR
+; 186     22 d800_2100    	outc	#33	; !
+; 187     23 c810_ff00    	halt
+; 188                     
+; 189                     ; Render board subroutine
+; 190                     ;
+; 191                     ; How:
+; 192                     ; Render the gameboard from left to right, top to bottom, to give the most simple console output (avoids ANSI console cursor movement).
+; 193                     ;
+; 194                     ; LOOP A: Starts at top of the board and then switches to bottom half of the board. The gameboard ptr offset changes from 1 to 0.
+; 195                     ; LOOP B: Work down the rows using a single byte bitmask, shifting it right each iteration.
+; 196                     ; LOOP C: Work along the columns from 0 to 10, incrementing the gameboard ptr by 2 each iteration.
+; 197                     ;         Decide whether to render a block or empty character by ANDing the gameboard ptr value with the current bitmask
+; 198                     
+; 199                     ; Temporary variables for internal use
+; 200     24              render_board_top	skip	1 ; boolean to select top or bottom of the board. 1 for top, 0 for bottom.
+; 201     25              render_board_mask	skip	1 ; The row mask for selecting the row to render
+; 202     26              render_board_col	skip	1 ; The current column iteration. -10 -> 0 (to allow for increment and jump if not zero)
+; 203                     
+; 205     27 4800_0124    	st	#1,	render_board_top
+; 207     28 4800_8025    	st	#%1000_0000,	render_board_mask
+; 209     29 4800_702d    	st	#gameboard,	render_board_ptr
+; 210     2a 0880_242d    	addto	render_board_top,	render_board_ptr	; Offset the gameboard ptr by 1 if we're rendering the top half
+; 211     2b 4800_f626    	st	#-10,	render_board_col	; Prepare column loop counter
+; 213     2c 4800_0000    	clr	tmp
+; 214     2d 8080_0000    render_board_ptr	add	tmp,	0	; Load
+; 216     2e 0980_2500    	andto	render_board_mask,	tmp
+; 219     2f 006a_0032    	jne	tmp,	render_board_print_a
+; 220     30 d800_7e00    	outc	#EMPTY_CHAR
+; 221     31 4018_ff33    	jmp	render_board_print_b
+; 222     32 d800_2300    render_board_print_a	outc	#BLOCK_CHAR
+; 224     33 4880_022d    	addto	#2,	render_board_ptr	; Move onto next column byte
+; 225     34 802a_262c    	incjne	render_board_col,	render_board_loop_c	; Row render loop
+; 228     35 d800_0d00    	outc	#CR_CHAR
+; 229     36 d800_0a00    	outc	#LF_CHAR
+; 230                     
+; 231     37 0a00_2525    	lsr	render_board_mask		; Logical shift right (0 into top spot). This moves down a row.
+; 232     38 0064_0029    	jcc	render_board_loop_b		; Loop if we haven't shifted all the way out yet
+; 236     39 48e0_0124    	dec	render_board_top
+; 237     3a 0062_2428    	jeq	render_board_top,	render_board_loop_a	; Move onto bottom half of board
+; 238                     
+; 239     3b 4018_ff00    render_board_ret	jmp	0		; Return from subroutine.
+; 240                     
+; 241                     ; line_clr
+; 242                     ;
+; 243                     ; Clears all full rows from the gameboard.
+; 244                     ;
+; 245                     ; How:
+; 246                     ; 1. Call get_full_lines to generate a bitmask of all the complete rows
+; 247                     ; 2. Call rem_bits on each column in the gameboard with a copy of the complete rows bitmask.
+; 248                     ; 3. Copy the result back over the gameboard.
+; 249                     ;
+; 250     3c              line_clr_i	skip	1	; We cannot use tmp as loop counter since we call subroutines which overwrite tmp.
+; 251                     
+; 254     3d 4800_005d    	clr	rem_bits_value+0
+; 255     3e 4800_005e    	clr	rem_bits_value+1
+; 256                     
+; 258     3f 8408_5a51    	jsr	get_full_lines_ret,	get_full_lines
+; 261                     
+; 263     40 4800_f63c    	st	#-10,	line_clr_i	; Prep the loop counter
+; 264                     
+; 267     41 4800_6e46    	st	#gameboard-2,	line_clr_read_ptr_0
+; 269                     
+; 270                     ; Line clear loop. It will call rem_bits with the line clear mask and each column of the gameboard.
+; 274     42 0800_4f5b    	st	get_full_lines_mask+0,	rem_bits_mask+0
+; 275     43 0800_505c    	st	get_full_lines_mask+1,	rem_bits_mask+1
+; 276                     
+; 279     44 4880_0246    	addto	#2,	line_clr_read_ptr_0	; Prep ptr +0
+; 280     45 0820_4647    	insn INCTO_INSN	line_clr_read_ptr_0,	line_clr_read_ptr_1	; Prep ptr +1
+; 285     46 8080_5d00    line_clr_read_ptr_0	add	rem_bits_value+0,	0	; Load +0
+; 286     47 8080_5e00    line_clr_read_ptr_1	add	rem_bits_value+1,	0	; Load +1
+; 289     48 8408_6f61    	jsr	rem_bits_ret,	rem_bits
+; 292     49 0800_464b    	st	line_clr_read_ptr_0,	line_clr_write_ptr_0
+; 293     4a 0800_474c    	st	line_clr_read_ptr_1,	line_clr_write_ptr_1
+; 295     4b 0800_5f00    line_clr_write_ptr_0	st	rem_bits_result+0,	0
+; 296     4c 0800_6000    line_clr_write_ptr_1	st	rem_bits_result+1,	0
+; 297                     
+; 298     4d 802a_3c42    	incjne	line_clr_i,	line_clr_loop	; Loop
+; 299     4e 4018_ff00    line_clr_ret	jmp	0		; Return from subroutine
+; 300                     
+; 301                     ; get_full_lines
+; 302                     ;
+; 303                     ; Generates a 2 byte, 16 bit bitmask indicating which rows in the gameboard are filled.
+; 304                     ; This is the bitwise AND of all columns in the gameboard.
+; 305                     ;
+; 306     4f              get_full_lines_mask	skip	2
+; 307                     
+; 309     51 4800_f600    	st	#-10,	tmp
+; 310     52 4800_ff4f    	st	#0xFF,	get_full_lines_mask+0
+; 311     53 4800_ff50    	st	#0xFF,	get_full_lines_mask+1
+; 312     54 4800_6e57    	st	#gameboard-2,	get_full_lines_ptr_0
+; 314     55 4880_0257    	addto	#2,	get_full_lines_ptr_0
+; 315     56 0820_5758    	insn INCTO_INSN	get_full_lines_ptr_0,	get_full_lines_ptr_1
+; 316     57 8180_4f00    get_full_lines_ptr_0	insn AND_INSN	get_full_lines_mask+0,	0
+; 317     58 8180_5000    get_full_lines_ptr_1	insn AND_INSN	get_full_lines_mask+1,	0
+; 319     59 802a_0055    	incjne	tmp,	get_full_lines_loop
+; 320     5a 4018_ff00    get_full_lines_ret	jmp	0		; Return from subroutine
 ; 321                     
 ; 322                     ; rem_bits
 ; 323                     ;
-; 324                     ; Remove the bits from rem_bits_val in the positions they are set in rem_bits_mask.
-; 325                     ; For each bit removed, the more significant bits are shifted downwards to fill its place.
-; 326                     ; The most significant bits are filled with zeroes.
-; 327                     ; The output is placed in rem_bits_result.
-; 328                     ;
-; 329     5c              rem_bits_mask	skip	2
-; 330     5e              rem_bits_value	skip	2
-; 331     60              rem_bits_result	skip	2
-; 333     62 4800_f000    	st	#-16,	tmp	; Loop 16 times
-; 335     63 0880_5c5c    	lsl	rem_bits_mask+0		; Logical shift left mask (0 -> bit 0)
-; 336     64 0890_5d5d    	rol	rem_bits_mask+1		; (bit 15 -> carry)
-; 337     65 0064_0069    	jcc	rem_bits_A		; GOTO A if carry clear
-; 339     66 0880_5e5e    	lsl	rem_bits_value+0		; Logical shift left value
-; 340     67 0890_5f5f    	rol	rem_bits_value+1
-; 341     68 4018_ff6d    	jmp	rem_bits_end
-; 343     69 0880_5e5e    	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
-; 344     6a 0890_5f5f    	rol	rem_bits_value+1		; (bit 15 -> carry)
-; 345     6b 0890_6060    	rol	rem_bits_result+0		; Rotate left into result (carry -> bit 0)
-; 346     6c 0890_6161    	rol	rem_bits_result+1		; (bit 15-> carry)
-; 347     6d 802a_0063    rem_bits_end	incjne	tmp,	rem_bits_loop	; Loop
-; 348     6e 4018_ff00    rem_bits_ret	jmp	0		; Return
-; 349                     
-; 350                     
-; 351                     
-; 352                     ; Game board
-; 353                     ;
-; 354     6f              gameboard	skip	20
-; 355                     ;
-; 356                     ; The gameboard is made up of bytes stacked vertically.
-; 357                     ; There are two bytes end to end for each column, 10 colums wide.
-; 358                     ; This makes a 16x10 game board, totalling 20 bytes.
-; 359                     ; The lower address, even index byte is at the bottom of the board, the higher address, odd index byte is at the top.
-; 360                     ; The less significant bits in each byte are towards the bottom of the board, the higher significant bits are towards the top.
+; 324                     ; Remove the bits from rem_bits_value in the positions they are set in rem_bits_mask.
+; 325                     ; For each bit removed, the more significant bits are shifted right to fill its place.
+; 326                     ; The leftmost most significant bits are filled with zeroes.
+; 327                     ;
+; 328                     ; The output is placed in rem_bits_result.
+; 329                     ; rem_bits_mask and rem_bits_value are zeroed as a result of the process.
+; 330                     ;
+; 331     5b              rem_bits_mask	skip	2
+; 332     5d              rem_bits_value	skip	2
+; 333     5f              rem_bits_result	skip	2
+; 336     61 4800_005f    	clr	rem_bits_result+0
+; 337     62 4800_0060    	clr	rem_bits_result+1
+; 338                     
+; 339     63 4800_f000    	st	#-16,	tmp	; Loop 16 times
+; 341     64 0880_5b5b    	lsl	rem_bits_mask+0		; Logical shift left mask (0 -> bit 0)
+; 342     65 0890_5c5c    	rol	rem_bits_mask+1		; (bit 15 -> carry)
+; 343     66 0064_006a    	jcc	rem_bits_A		; GOTO A if carry clear
+; 345     67 0880_5d5d    	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
+; 346     68 0890_5e5e    	rol	rem_bits_value+1		; The carry result is discarded.
+; 347     69 4018_ff6e    	jmp	rem_bits_loop_end
+; 349     6a 0880_5d5d    	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
+; 350     6b 0890_5e5e    	rol	rem_bits_value+1		; (bit 15 -> carry)
+; 351     6c 0890_5f5f    	rol	rem_bits_result+0		; Rotate left to save the carry into result (carry -> bit 0)
+; 352     6d 0890_6060    	rol	rem_bits_result+1		; Carry from rotating result is discarded.
+; 353     6e 802a_0064    rem_bits_loop_end	incjne	tmp,	rem_bits_loop	; Loop
+; 354     6f 4018_ff00    rem_bits_ret	jmp	0		; Return from subroutine
+; 355                     
+; 356                     
+; 357                     
+; 358                     ; Game board
+; 359                     ;
+; 360     70              gameboard	skip	20
 ; 361                     ;
-; 362                     ; Ideally we would use three bytes per row to make a 24x10 gameboard in 30 bytes,
-; 363                     ; but we simply don't have the room for it.
-; 364                     ;
-; 365                     ; Gameboard layout (byte.bit):
-; 366                     ;
-; 367                     ; 01.7 03.7 05.7 07.7 09.7 11.7 13.7 15.7 17.7 19.7
-; 368                     ; 01.6 03.6 05.6 07.6 09.6 11.6 13.6 15.6 17.6 19.6
-; 369                     ; 01.5 03.5 05.5 07.5 09.5 11.5 13.5 15.5 17.5 19.5
-; 370                     ; 01.4 03.4 05.4 07.4 09.4 11.4 13.4 15.4 17.4 19.4
-; 371                     ; 01.3 03.3 05.3 07.3 09.3 11.3 13.3 15.3 17.3 19.3
-; 372                     ; 01.2 03.2 05.2 07.2 09.2 11.2 13.2 15.2 17.2 19.2
-; 373                     ; 01.1 03.1 05.1 07.1 09.1 11.1 13.1 15.1 17.1 19.1
-; 374                     ; 01.0 03.0 05.0 07.0 09.0 11.0 13.0 15.0 17.0 19.0
-; 375                     ; 00.7 02.7 04.7 06.7 08.7 10.7 12.7 14.7 16.7 18.7
-; 376                     ; 00.6 02.6 04.6 06.6 08.6 10.6 12.6 14.6 16.6 18.6
-; 377                     ; 00.5 02.5 04.5 06.5 08.5 10.5 12.5 14.5 16.5 18.5
-; 378                     ; 00.4 02.4 04.4 06.4 08.4 10.4 12.4 14.4 16.4 18.4
-; 379                     ; 00.3 02.3 04.3 06.3 08.3 10.3 12.3 14.3 16.3 18.3
-; 380                     ; 00.2 02.2 04.2 06.2 08.2 10.2 12.2 14.2 16.2 18.2
-; 381                     ; 00.1 02.1 04.1 06.1 08.1 10.1 12.1 14.1 16.1 18.1
-; 382                     ; 00.0 02.0 04.0 06.0 08.0 10.0 12.0 14.0 16.0 18.0
-; 383                     
-; 384                     
-; 385                     ; New piece stage
-; 386                     ; TODO
+; 362                     ; The gameboard is made up of bytes stacked vertically.
+; 363                     ; There are two bytes end to end for each column, 10 colums wide.
+; 364                     ; This makes a 16x10 game board, totalling 20 bytes.
+; 365                     ; The lower, even index byte is at the bottom of the board. The higher, odd index byte is at the top.
+; 366                     ; The less significant bits in each byte are towards the bottom of the board, the higher significant bits are towards the top.
+; 367                     ;
+; 368                     ; Ideally we would use three bytes per row to make a 24x10 gameboard in 30 bytes,
+; 369                     ; but this increases both gameboard storage size and the code required to deal with it.
+; 370                     ;
+; 371                     ; Gameboard layout (byte.bit):
+; 372                     ;
+; 373                     ; 1.7 3.7 5.7 7.7 9.7 11.7 13.7 15.7 17.7 19.7
+; 374                     ; 1.6 3.6 5.6 7.6 9.6 11.6 13.6 15.6 17.6 19.6
+; 375                     ; 1.5 3.5 5.5 7.5 9.5 11.5 13.5 15.5 17.5 19.5
+; 376                     ; 1.4 3.4 5.4 7.4 9.4 11.4 13.4 15.4 17.4 19.4
+; 377                     ; 1.3 3.3 5.3 7.3 9.3 11.3 13.3 15.3 17.3 19.3
+; 378                     ; 1.2 3.2 5.2 7.2 9.2 11.2 13.2 15.2 17.2 19.2
+; 379                     ; 1.1 3.1 5.1 7.1 9.1 11.1 13.1 15.1 17.1 19.1
+; 380                     ; 1.0 3.0 5.0 7.0 9.0 11.0 13.0 15.0 17.0 19.0
+; 381                     ; 0.7 2.7 4.7 6.7 8.7 10.7 12.7 14.7 16.7 18.7
+; 382                     ; 0.6 2.6 4.6 6.6 8.6 10.6 12.6 14.6 16.6 18.6
+; 383                     ; 0.5 2.5 4.5 6.5 8.5 10.5 12.5 14.5 16.5 18.5
+; 384                     ; 0.4 2.4 4.4 6.4 8.4 10.4 12.4 14.4 16.4 18.4
+; 385                     ; 0.3 2.3 4.3 6.3 8.3 10.3 12.3 14.3 16.3 18.3
+; 386                     ; 0.2 2.2 4.2 6.2 8.2 10.2 12.2 14.2 16.2 18.2
+; 387                     ; 0.1 2.1 4.1 6.1 8.1 10.1 12.1 14.1 16.1 18.1
+; 388                     ; 0.0 2.0 4.0 6.0 8.0 10.0 12.0 14.0 16.0 18.0
+; 389                     
+; 390                     
+; 391                     ; New piece stage
+; 392                     ; TODO
+; 393                     
+; 394                     ; Placeholder label to easily see how big the program is from the symbol table
 
-; 29 errors detected in pass 2
+; 0 errors detected in pass 2
 
 ; Symbol table:
 ; AND_INSN = 0x81800000
@@ -409,14 +349,10 @@
 ; CR_CHAR = 0xd
 ; C_CHAR = 0x43
 ; D_CHAR = 0x44
-; EMPTY_CHAR = 0x20
+; EMPTY_CHAR = 0x7e
+; END_OF_PROGRAM = 0x84
 ; E_CHAR = 0x45
-; F1 = ???
-; FF = ???
 ; F_CHAR = 0x46
-; GB_HI_EMPTY = 0x8
-; GB_LO_EMPTY = 0x1
-; GB_ROWS = 0x14
 ; G_CHAR = 0x47
 ; H_CHAR = 0x48
 ; INCTO_INSN = 0x8200000
@@ -431,6 +367,7 @@
 ; P_CHAR = 0x50
 ; Q_CHAR = 0x51
 ; R_CHAR = 0x52
+; SPACE_CHAR = 0x20
 ; S_CHAR = 0x53
 ; T_CHAR = 0x54
 ; U_CHAR = 0x55
@@ -440,70 +377,72 @@
 ; Y_CHAR = 0x59
 ; ZERO_CHAR = 0x30
 ; Z_CHAR = 0x5a
-; current_piece = 0xa
-; current_pose = 0xb
-; current_x = 0xc
-; current_y = 0xd
+; current_piece = 0x3
+; current_pose = 0x4
+; current_x = 0x5
+; current_y = 0x6
 ; exec = 0x1
-; gameboard = 0x6f
-; i_piece = 0x8
-; j_piece = 0x6
-; l_piece = 0x5
-; line_clr = 0x42
-; line_clr_b_ptr = 0x49
-; line_clr_col2_loop = 0x4f
-; line_clr_col_bot_ptr = 0x51
-; line_clr_col_bot_ptr2 = 0x56
-; line_clr_col_end = 0x4a
-; line_clr_col_loop = 0x49
-; line_clr_col_top_ptr = 0x52
-; line_clr_col_top_ptr2 = 0x57
-; line_clr_i = 0x41
-; line_clr_mask = 0x3f
-; line_clr_outer_end = 0x4b
-; line_clr_outer_loop = 0x44
-; line_clr_ret = 0x5b
-; lines_cleared = 0x9
-; o_piece = 0x7
+; gameboard = 0x70
+; get_full_lines = 0x51
+; get_full_lines_loop = 0x55
+; get_full_lines_mask = 0x4f
+; get_full_lines_ptr_0 = 0x57
+; get_full_lines_ptr_1 = 0x58
+; get_full_lines_ret = 0x5a
+; i_piece = 0xf0
+; j_piece = 0x74
+; l_piece = 0x47
+; line_clr = 0x3d
+; line_clr_i = 0x3c
+; line_clr_loop = 0x42
+; line_clr_read_ptr_0 = 0x46
+; line_clr_read_ptr_1 = 0x47
+; line_clr_ret = 0x4e
+; line_clr_write_ptr_0 = 0x4b
+; line_clr_write_ptr_1 = 0x4c
+; lines_cleared = 0x2
+; o_piece = 0x66
 ; pieces_arr = 0x2
-; rem_bits = 0x62
-; rem_bits_A = 0x69
-; rem_bits_end = 0x6d
-; rem_bits_loop = 0x63
-; rem_bits_mask = 0x5c
-; rem_bits_result = 0x60
-; rem_bits_ret = 0x6e
-; rem_bits_value = 0x5e
-; render_board = 0x2a
-; render_board_col = 0x29
-; render_board_loop_a = 0x2b
-; render_board_loop_b = 0x2c
-; render_board_loop_c = 0x2f
-; render_board_mask = 0x28
-; render_board_print_a = 0x35
-; render_board_print_b = 0x36
-; render_board_ptr = 0x30
-; render_board_ret = 0x3e
-; render_board_top = 0x27
-; run = 0xe
-; s_piece = 0x3
-; t_piece = 0x2
+; rem_bits = 0x61
+; rem_bits_A = 0x6a
+; rem_bits_loop = 0x64
+; rem_bits_loop_end = 0x6e
+; rem_bits_mask = 0x5b
+; rem_bits_result = 0x5f
+; rem_bits_ret = 0x6f
+; rem_bits_value = 0x5d
+; render_board = 0x27
+; render_board_col = 0x26
+; render_board_loop_a = 0x28
+; render_board_loop_b = 0x29
+; render_board_loop_c = 0x2c
+; render_board_mask = 0x25
+; render_board_print_a = 0x32
+; render_board_print_b = 0x33
+; render_board_ptr = 0x2d
+; render_board_ret = 0x3b
+; render_board_top = 0x24
+; run = 0x7
+; s_piece = 0x63
+; t_piece = 0x72
 ; tmp = 0x0
-; z_piece = 0x4
+; z_piece = 0x36
 
 ; Memory image:
-00: c810ff00 4018ff0e c810ff72 c810ff63 c810ff36 c810ff47 c810ff74 c810ff66
-08: c810fff0
-0e: 4800006f 48000070
-10: 48000800 48000072 48000073 48000074 48000075 48000500 48000077 48000078
-18: 48000079 4800007a 4800007b 4800007c 4800007d 4800007e 4800007f 48000080
-20: 48000081 48000082 84083e2a c810ff00 84085b42 84083e2a c810ff00
-2a: 48000127 48005028 48006f30 08802730 4800f629 48000000
-30: 80800000 09802800 006a0035 d8003000 4018ff36 d8003100 48800230 802a292f
-38: d8000d00 d8000a00 0a002828 0064002c 48e00127 0062272b 4018ff00
-42: 4800ff00 4800fe00 48007149 08800049 4800f641 0800403f
-48: 4800ff00 48800249 802a4149 802a0044 4800f641 48006f51 48007052 08003f5c
-50: 0800405d 80805e00 80805f00 84086e62 08005156 08005257 08006000 08006100
-58: 48800251 48800252 802a414f 4018ff00
-62: 4800f000 08805c5c 08905d5d 00640069 08805e5e 08905f5f
-68: 4018ff6d 08805e5e 08905f5f 08906060 08906161 802a0063 4018ff00
+00: c810ff00 4018ff07
+07: 4800ff83
+08: 4800f181 4800f97f 4800fd7d 4800ff7b 4800ff79 4800fd77 4800f975 4800f173
+10: 4800ff71 48000f82 48001f80 48003f7e 48007e7c 4800fc7a 4800fc78 48007e76
+18: 48003f74 48001f72 48000f70 84083b27 d8000d00 d8000a00 84084e3d 84083b27
+20: d8000d00 d8000a00 d8002100 c810ff00
+27: 48000124
+28: 48008025 4800702d 0880242d 4800f626 48000000 80800000 09802500 006a0032
+30: d8007e00 4018ff33 d8002300 4880022d 802a262c d8000d00 d8000a00 0a002525
+38: 00640029 48e00124 00622428 4018ff00
+3d: 4800005d 4800005e 84085a51
+40: 4800f63c 48006e46 08004f5b 0800505c 48800246 08204647 80805d00 80805e00
+48: 84086f61 0800464b 0800474c 08005f00 08006000 802a3c42 4018ff00
+51: 4800f600 4800ff4f 4800ff50 48006e57 48800257 08205758 81804f00
+58: 81805000 802a0055 4018ff00
+61: 4800005f 48000060 4800f000 08805b5b 08905c5c 0064006a 08805d5d
+68: 08905e5e 4018ff6e 08805d5d 08905e5e 08905f5f 08906060 802a0064 4018ff00
