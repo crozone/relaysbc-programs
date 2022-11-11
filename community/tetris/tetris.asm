@@ -68,6 +68,7 @@ Z_CHAR	equ	A_CHAR+25
 ; To use these, call them like: insn INCTO_INSN aa, bb
 AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs [aa] and [bb], and stores in [aa].
 INCTO_INSN	equ	0x08200000	; Stores [aa] + 1 --> [bb] in one instruction.
+OUTCJMP_INSN	equ	0x98080000	; Writes [aa] to the console and jumps to bb
 
 ; Catch for any jumps to null (0x00). This usually indicates a subroutine hasn't had its return address set.
 ;
@@ -215,8 +216,7 @@ render_board_ptr	insn AND_INSN	tmp,	0	; Indirect AND, store result in tmp
 	
 	; Print a block or an empty cell depending whether the board & mask > 0
 	jne	tmp,	render_board_print_a
-	outc	#EMPTY_CHAR
-	jmp	render_board_print_b
+	insn OUTCJMP_INSN	#EMPTY_CHAR,	render_board_print_b	; Print empty char and jump over the block char print
 render_board_print_a	outc	#BLOCK_CHAR
 render_board_print_b
 	addto	#2,	render_board_ptr	; Move onto next column byte
