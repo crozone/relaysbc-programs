@@ -210,10 +210,8 @@ render_board_loop_b
 	addto	render_board_top,	render_board_ptr	; Offset the gameboard ptr by 1 if we're rendering the top half
 	st	#-10,	render_board_col	; Prepare column loop counter
 render_board_loop_c
-	clr	tmp
-render_board_ptr	add	tmp,	0	; Load
-	
-	andto	render_board_mask,	tmp
+	st	render_board_mask,	tmp
+render_board_ptr	insn AND_INSN	tmp,	0	; Indirect AND, store result in tmp
 	
 	; Print a block or an empty cell depending whether the board & mask > 0
 	jne	tmp,	render_board_print_a
