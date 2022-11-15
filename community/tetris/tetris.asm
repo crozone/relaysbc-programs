@@ -153,50 +153,50 @@ run
 	; Setup testing gameboard
 	; Rotate your head to the left and squint
 	; Top
-	st	#%1111_1111,	gameboard+19
-	st	#%1111_0001,	gameboard+17
-	st	#%1111_1001,	gameboard+15
-	st	#%1111_1101,	gameboard+13
-	st	#%1111_1111,	gameboard+11
-	st	#%1111_1111,	gameboard+9
-	st	#%1111_1101,	gameboard+7
-	st	#%1111_1001,	gameboard+5
-	st	#%1111_0001,	gameboard+3
-	st	#%1111_1111,	gameboard+1
-	; Bottom
-	st	#%0000_1111,	gameboard+18
-	st	#%0001_1111,	gameboard+16
-	st	#%0011_1111,	gameboard+14
-	st	#%0111_1110,	gameboard+12
-	st	#%1111_1100,	gameboard+10
-	st	#%1111_1100,	gameboard+8
-	st	#%0111_1110,	gameboard+6
-	st	#%0011_1111,	gameboard+4
-	st	#%0001_1111,	gameboard+2
-	st	#%0000_1111,	gameboard+0
-
-	; Top
-	; st	#%0000_0010,	gameboard+19
-	; st	#%0000_0010,	gameboard+17
-	; st	#%0010_0010,	gameboard+15
-	; st	#%0111_0011,	gameboard+13
-	; st	#%0000_0010,	gameboard+11
-	; st	#%0000_0010,	gameboard+9
-	; st	#%0000_0010,	gameboard+7
-	; st	#%0000_0010,	gameboard+5
-	; st	#%0000_0111,	gameboard+3
-	; st	#%0011_1111,	gameboard+1
+	; st	#%1111_1111,	gameboard+19
+	; st	#%1111_0001,	gameboard+17
+	; st	#%1111_1001,	gameboard+15
+	; st	#%1111_1101,	gameboard+13
+	; st	#%1111_1111,	gameboard+11
+	; st	#%1111_1111,	gameboard+9
+	; st	#%1111_1101,	gameboard+7
+	; st	#%1111_1001,	gameboard+5
+	; st	#%1111_0001,	gameboard+3
+	; st	#%1111_1111,	gameboard+1
 	; ; Bottom
 	; st	#%0000_1111,	gameboard+18
 	; st	#%0001_1111,	gameboard+16
 	; st	#%0011_1111,	gameboard+14
-	; st	#%1111_1111,	gameboard+12
-	; st	#%0000_1111,	gameboard+10
-	; st	#%0011_1111,	gameboard+8
-	; st	#%0111_1111,	gameboard+6
-	; st	#%0000_1111,	gameboard+4
-	; st	#%1111_1101,	gameboard+2
-	; st	#%1111_1111,	gameboard+0
+	; st	#%0111_1110,	gameboard+12
+	; st	#%1111_1100,	gameboard+10
+	; st	#%1111_1100,	gameboard+8
+	; st	#%0111_1110,	gameboard+6
+	; st	#%0011_1111,	gameboard+4
+	; st	#%0001_1111,	gameboard+2
+	; st	#%0000_1111,	gameboard+0
+
+	; Top
+	st	#%0000_0010,	gameboard+19
+	st	#%0000_0010,	gameboard+17
+	st	#%0010_0010,	gameboard+15
+	st	#%0111_0011,	gameboard+13
+	st	#%0000_0010,	gameboard+11
+	st	#%0000_0010,	gameboard+9
+	st	#%0000_0010,	gameboard+7
+	st	#%0000_0010,	gameboard+5
+	st	#%0000_0111,	gameboard+3
+	st	#%0011_1111,	gameboard+1
+	; Bottom
+	st	#%0000_1111,	gameboard+18
+	st	#%0001_1111,	gameboard+16
+	st	#%0011_1111,	gameboard+14
+	st	#%1111_1111,	gameboard+12
+	st	#%0000_1111,	gameboard+10
+	st	#%0011_1111,	gameboard+8
+	st	#%0111_1111,	gameboard+6
+	st	#%0000_1111,	gameboard+4
+	st	#%1111_1101,	gameboard+2
+	st	#%1111_1111,	gameboard+0
 	
 	; Print game board
 	jsr	render_board_ret,	render_board
