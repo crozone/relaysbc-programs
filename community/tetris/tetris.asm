@@ -31,6 +31,8 @@ GAMEBOARD_STRIDE	equ	2	; How many bytes high is the gameboard. 2 bytes = 16 rows
 GAMEBOARD_COLS	equ	10	; How many columns wide is the gameboard. This is generic enough that it can be adjusted without altering any code.
 GAMEBOARD_SIZE	equ	(GAMEBOARD_STRIDE*GAMEBOARD_COLS)	; Gameboard total size = stride * columns
 
+PIECE_STAGE_SIZE	equ	(GAMEBOARD_STRIDE*4)	; The piece stage is the same height as the gameboard, but only 4 wide.
+
 SPACE_CHAR	equ	0x20	; Space
 BLOCK_CHAR	equ	0x23	; #
 EMPTY_CHAR	equ	0x7E 	; ~
@@ -74,8 +76,10 @@ Z_CHAR	equ	A_CHAR+25
 ; To use these, call them like: insn INCTO_INSN aa, bb
 AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs [aa] and [bb], and stores in [aa].
 INCTO_INSN	equ	0x08200000	; Stores [aa] + 1 --> [bb] in one instruction.
-OUTC_JMP_INSN	equ	0x98080000	; Writes [aa] to the console and jumps to bb
+OUTC_JMP_INSN	equ	0x98080000	; Writes [aa] to the console and jumps to bb. WRA and WRB are set to make OUT write to console.
 LSR_JCC_INSN	equ	0x820A0000	; Rotates [aa] right, writes the result back to [aa], and jumps if the shifted out bit (carry output) was clear.
+ST_JMP_INSN	equ	0x08080000	; Stores [aa] --> [bb] and jumps to bb.
+
 
 ; Catch for any jumps to null (0x00). This usually indicates a subroutine hasn't had its return address set.
 ;
@@ -100,40 +104,38 @@ exec	jmp	run	; Jump to start of program
 ; left to right RSB to LSB, so take care.
 ;
 
-pieces_arr
-
 ;; TODO: How do these actually get decoded/used?
 
 ; Real | Bits | Hex
-;
-; 1110 | 0111 | 7
-; 0100 | 0010 | 2
-t_piece	equ	0x72
-
-; 0110 | 0110 | 6
-; 1100 | 0011 | 3
-s_piece	equ	0x63
-
-; 1100 | 0011 | 3
-; 0110 | 0110 | 6
-z_piece	equ	0x36
-
-; 0010 | 0100 | 4
-; 1110 | 0111 | 7
-l_piece	equ	0x47
-
-; 1110 | 0111 | 7
-; 0010 | 0100 | 4
-j_piece	equ	0x74
-
-; 0110 | 0110 | 6
-; 0110 | 0110 | 6
-o_piece	equ	0x66
 
 ; 1111 | 1111 | F
 ; 0000 | 0000 | 0
-i_piece	equ	0xF0
+I_PIECE	equ	0xF0
 
+; 0110 | 0110 | 6
+; 0110 | 0110 | 6
+O_PIECE	equ	0x66
+
+;
+; 1110 | 0111 | 7
+; 0100 | 0010 | 2
+T_PIECE	equ	0x72
+
+; 0110 | 0110 | 6
+; 1100 | 0011 | 3
+S_PIECE	equ	0x63
+
+; 1100 | 0011 | 3
+; 0110 | 0110 | 6
+Z_PIECE	equ	0x36
+
+; 1110 | 0111 | 7
+; 0010 | 0100 | 4
+J_PIECE	equ	0x74
+
+; 0010 | 0100 | 4
+; 1110 | 0111 | 7
+L_PIECE	equ	0x47
 
 
 ; Game state
@@ -225,6 +227,65 @@ run
 	; Halt
 	outc	#33	; !
 	halt
+	
+; Prepare piece stage subroutine
+; prep_piece_number = which piece to render. {0,1,2,3,4,5,6}
+;
+; Piece rotation. 4 different values for each direction. {0,1,2,3}.
+;
+prep_piece_rot	skip	1
+prep_piece
+	;andto	#0x03,	prep_piece_rot
+	;andto	#0x07,	prep_piece_number
+	
+	; Calculate jump table address for piece value
+	;
+	; Jump address = prep_piece_jmp + (2 * prep_piece_number) + prep_piece_rot.1
+	;
+	; Get the second bit from prep_piece_rot into carry flag
+	lsrto	prep_piece_rot,	tmp
+	lsr	tmp
+	adcto	prep_piece_number,	prep_piece_number
+	; Add jump table base address
+	addto	#prep_piece_jmp,	prep_piece_number
+	; Do the jump
+prep_piece_number	jmp	0
+	
+prep_piece_jmp	; Begin jump table
+	insn ST_JMP_INSN	#O_PIECE,	prep_piece_value
+	insn ST_JMP_INSN	#O_PIECE_FLIP,	prep_piece_value
+	insn ST_JMP_INSN	#I_PIECE,	prep_piece_value
+	insn ST_JMP_INSN	#I_PIECE_FLIP,	prep_piece_value
+	insn ST_JMP_INSN	#T_PIECE,	prep_piece_value
+	insn ST_JMP_INSN	#T_PIECE_FLIP,	prep_piece_value
+	insn ST_JMP_INSN	#S_PIECE,	prep_piece_value
+	insn ST_JMP_INSN	#S_PIECE_FLIP,	prep_piece_value
+	insn ST_JMP_INSN	#Z_PIECE,	prep_piece_value
+	insn ST_JMP_INSN	#Z_PIECE_FLIP,	prep_piece_value
+	insn ST_JMP_INSN	#J_PIECE,	prep_piece_value
+	insn ST_JMP_INSN	#J_PIECE_FLIP,	prep_piece_value
+	insn ST_JMP_INSN	#L_PIECE,	prep_piece_value
+	insn ST_JMP_INSN	#L_PIECE_FLIP,	prep_piece_value
+	
+	; prep_piece_value stores the jump table result.
+prep_piece_value	nop	0
+
+	; CASE 0: Vertical
+	jo	prep_piece_rot,	prep_piece_hor
+prep_piece_vert
+	st	st	prep_piece_value,	piece_stage+5
+	andto	#0xF0,	piece_stage+5
+	st	#-4,	tmp
+prep_piece_shift_loop	lsl	prep_piece_value
+	incjne	tmp,	prep_piece_shift_loop
+	st	prep_piece_value,	piece_stage+3
+	jmp	prep_piece_ret
+	
+	; CASE 1: Horizontal
+prep_piece_hor	
+	; TODO
+	
+prep_piece_ret	jmp	0
 
 ; Render board subroutine
 ;
@@ -429,8 +490,27 @@ gameboard	skip	GAMEBOARD_SIZE
 ; 0.0 2.0 4.0 6.0 8.0 10.0 12.0 14.0 16.0 18.0
 
 
-; New piece stage
-; TODO
+; Piece stage
+piece_stage	skip	PIECE_STAGE_SIZE
+;
+; Piece stage layout (byte.bit):
+;
+; 1.7 3.7 5.7 7.7
+; 1.6 3.6 5.6 7.6
+; 1.5 3.5 5.5 7.5
+; 1.4 3.4 5.4 7.4
+; 1.3 3.3 5.3 7.3
+; 1.2 3.2 5.2 7.2
+; 1.1 3.1 5.1 7.1
+; 1.0 3.0 5.0 7.0
+; 0.7 2.7 4.7 6.7
+; 0.6 2.6 4.6 6.6
+; 0.5 2.5 4.5 6.5
+; 0.4 2.4 4.4 6.4
+; 0.3 2.3 4.3 6.3
+; 0.2 2.2 4.2 6.2
+; 0.1 2.1 4.1 6.1
+; 0.0 2.0 4.0 6.0
 
 ; Placeholder label to easily see how big the program is from the symbol table
 END_OF_PROGRAM
