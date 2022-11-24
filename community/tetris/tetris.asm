@@ -95,63 +95,133 @@ exec	jmp	run	; Jump to start of program
 
 ; Pieces templates
 ;
-; Piece patterns are stored as a single byte, represening the piece in its starting/0 pose.
-; The byte makes up two rows of 4 colums, which is enough to fit every kind of piece lying "flat".
+; Piece patterns are stored as a single byte.
+; The 4 lsb bits represent the left of the piece, the 4 msb bits representing the right of the piece.
+; The alignment and bit direction matches the piece stage.
 ;
-; Bits 0-3 are the bottom row, bits 4-7 are the top row.
-; The LSB of the row is the _leftmost_ square, so pieces are rendered left to right LSB to RSB.
-; This is the left to right mirror of the way that bits are normally written out
-; left to right RSB to LSB, so take care.
+; A "flipped" version of each piece is also stored, which is similar to the piece being left-to-right bitswapped.
+; However using a dedicated version of the flipped piece removes the need for a bitswap subroutine,
+; which actually saves instructions overall, and also allows the pieces to be tweaked so that they rotate correctly.
 ;
+; The Gameboy left-handed rotation system was used as a reference, but the code doesn't attempt to exactly adhere to any particular system,
+; it just attempts to look somewhat acceptable and use minimal instructions.
 
-;; TODO: How do these actually get decoded/used?
 
-; Real | Bits | Hex
-
-; 1111 | 1111 | F
-; 0000 | 0000 | 0
+; I piece
+;
+;3   7
+; 0 1
+; 0 1
+; 0 1
+; 0 1
+;0   4
 I_PIECE	equ	0xF0
+I_PIECE_FLIP	equ	I_PIECE	; I piece is the same flipped
 
-; 0110 | 0110 | 6
-; 0110 | 0110 | 6
+; O (square) piece
+;
+;3   7
+; 0 0
+; 1 1
+; 1 1
+; 0 0
+;0   4
 O_PIECE	equ	0x66
+O_PIECE_FLIP	equ	O_PIECE	; Square is same in any rotation
 
+; T piece
 ;
-; 1110 | 0111 | 7
-; 0100 | 0010 | 2
-T_PIECE	equ	0x72
+;3   7
+; 0 0
+; 1 0
+; 1 1
+; 1 0
+;0   4
+T_PIECE	equ	0x27
 
-; 0110 | 0110 | 6
-; 1100 | 0011 | 3
-S_PIECE	equ	0x63
-
-; 1100 | 0011 | 3
-; 0110 | 0110 | 6
-Z_PIECE	equ	0x36
-
-; 1110 | 0111 | 7
-; 0010 | 0100 | 4
-J_PIECE	equ	0x74
-
-; 0010 | 0100 | 4
-; 1110 | 0111 | 7
-L_PIECE	equ	0x47
-
-
-; Game state
+; T piece flipped
 ;
-lines_cleared	skip	1
+;3   7
+; 0 0
+; 0 1
+; 1 1
+; 0 1
+;0   4
+T_PIECE_FLIP	equ	0x72
 
-current_piece	skip	1
-current_pose	skip	1
-current_x	skip	1
-current_y	skip	1
+; S piece
+;
+;3   7
+; 0 0
+; 1 0
+; 1 1
+; 0 1
+;0   4
+S_PIECE	equ	0x36
+S_PIECE_FLIP	equ	S_PIECE	; S piece is the same rotated
 
+; S piece
+;
+;3   7
+; 0 0
+; 0 1
+; 1 1
+; 1 0
+;0   4
+Z_PIECE	equ	0x63
+Z_PIECE_FLIP	equ	Z_PIECE	; Z piece is the same rotated
 
+; J piece
+;
+;3   7
+; 0 0
+; 0 1
+; 0 1
+; 1 1
+;0   4
+J_PIECE	equ	0x71
+
+; J piece flipped
+;
+;3   7
+; 0 0
+; 1 1
+; 1 0
+; 1 0
+;0   4
+J_PIECE_FLIP	equ	0x47
+
+; L piece
+;
+;3   7
+; 0 0
+; 1 0
+; 1 0
+; 1 1
+;0   4
+L_PIECE	equ	0x17
+
+; L piece flipped
+;
+;3   7
+; 0 0
+; 1 1
+; 0 1
+; 0 1
+;0   4
+L_PIECE_FLIP	equ	0x74
 
 ; Start of application code
 ;
+test_piece_loop_n	skip	1
+
 run
+
+	clr	piece_kind
+	clr	piece_rotation
+	st	#3,	piece_x
+	clr	piece_y
+
 	; Setup testing gameboard
 	; Rotate your head to the left and squint
 	; Top
@@ -180,8 +250,8 @@ run
 	; Top
 	st	#%0000_0010,	gameboard+19
 	st	#%0000_0010,	gameboard+17
-	st	#%0010_0010,	gameboard+15
-	st	#%0111_0011,	gameboard+13
+	st	#%0000_0010,	gameboard+15
+	st	#%0000_0011,	gameboard+13
 	st	#%0000_0010,	gameboard+11
 	st	#%0000_0010,	gameboard+9
 	st	#%0000_0010,	gameboard+7
@@ -209,20 +279,54 @@ run
 	; Do line clear
 	jsr	line_clr_ret,	line_clr
 	
-	; Print game board again
+	; Print game board
 	jsr	render_board_ret,	render_board
 	
 	outc	#CR_CHAR
 	outc	#LF_CHAR
 	
-	; Do line clear
-	jsr	line_clr_ret,	line_clr
+	st	#-7,	test_piece_loop_n
+test_piece_loop
+	; Prepare a piece
+	st	piece_kind,	prep_piece_number
+	st	#0,	prep_piece_rot
+	jsr	prep_piece_ret,	prep_piece
 	
-	; Print game board again
+	; Stamp to board
+	st	#stamp_piece_merge_op,	stamp_piece_op
+	jsr	stamp_piece_ret,	stamp_piece
+	
+	; Print game board
 	jsr	render_board_ret,	render_board
 	
 	outc	#CR_CHAR
 	outc	#LF_CHAR
+	
+	; Clear piece from board
+	st	#stamp_piece_clear_op,	stamp_piece_op
+	jsr	stamp_piece_ret,	stamp_piece
+	
+	; Prepare a piece
+	st	piece_kind,	prep_piece_number
+	st	#2,	prep_piece_rot
+	jsr	prep_piece_ret,	prep_piece
+	
+	; Stamp to board
+	st	#stamp_piece_merge_op,	stamp_piece_op
+	jsr	stamp_piece_ret,	stamp_piece
+	
+	; Print game board
+	jsr	render_board_ret,	render_board
+	
+	; Clear piece from board
+	st	#stamp_piece_clear_op,	stamp_piece_op
+	jsr	stamp_piece_ret,	stamp_piece
+	
+	outc	#CR_CHAR
+	outc	#LF_CHAR
+	
+	inc	piece_kind
+	incjne	test_piece_loop_n,	test_piece_loop
 	
 	; Halt
 	outc	#33	; !
@@ -268,13 +372,13 @@ prep_piece_jmp	; Begin jump table
 	insn ST_JMP_INSN	#L_PIECE_FLIP,	prep_piece_value
 	
 	; prep_piece_value stores the jump table result.
-prep_piece_value	nop	0
+prep_piece_value	nop
 
-	; CASE 0: Vertical
+	; If prep_piece_rot.0 is set, render horizontally, else render vertically.
 	jo	prep_piece_rot,	prep_piece_hor
 prep_piece_vert
-	st	st	prep_piece_value,	piece_stage+5
-	andto	#0xF0,	piece_stage+5
+	st	prep_piece_value,	piece_stage+5
+	andto	#0xF0,	piece_stage+5	; Clear lower 4 bits
 	st	#-4,	tmp
 prep_piece_shift_loop	lsl	prep_piece_value
 	incjne	tmp,	prep_piece_shift_loop
@@ -286,6 +390,63 @@ prep_piece_hor
 	; TODO
 	
 prep_piece_ret	jmp	0
+
+; Stamp piece board subroutine.
+;
+; This subroutine handles several functions:
+;
+; * ADDing the pieceboard to the gameboard (Stamping the piece down)
+; * BICing the pieceboard to the gameboard (Clearing the piece off)
+; * Checking for any common bits (AND result > 0) between pieceboard and gameboard (Checking for collision).
+;
+; stamp_piece_op must be set to #stamp_piece_coll_op, #stamp_piece_merge_op, or #stamp_piece_clear_op before executing.
+;
+; When executing stamp_piece_coll_op, tmp will be non-zero if a collision occured.
+;
+stamp_piece_ps_val	skip	1
+stamp_piece_gb_val	skip	1
+stamp_piece
+	
+	; Prep pointers
+	st	#piece_stage,	stamp_piece_ps_ptr
+	st	#gameboard,	stamp_piece_gb_ptr
+	st	piece_x,	tmp
+	lsl	tmp	; Multiply piece_x by 2 to get gameboard ptr offset
+	addto	tmp,	stamp_piece_gb_ptr
+	
+	; Prep loop
+	st	#-PIECE_STAGE_SIZE,	tmp
+stamp_piece_loop
+	clr	stamp_piece_ps_val
+stamp_piece_ps_ptr	add	stamp_piece_ps_val,	0	; Piece stage LOAD
+	
+	clr	stamp_piece_gb_val
+stamp_piece_gb_ptr	add	stamp_piece_gb_val,	0	; Game board LOAD
+
+	; Now do the operation specified.
+stamp_piece_op	jmp	0	; This is set before calling the subroutine
+	
+stamp_piece_coll_op	; Check for collision
+	andto	stamp_piece_ps_val,	stamp_piece_gb_val
+	je	stamp_piece_gb_val,	stamp_piece_loop_end
+	st	stamp_piece_gb_val,	tmp	; Store colliding bits in tmp
+	jmp	stamp_piece_ret
+stamp_piece_merge_op
+	; Since we know the gameboard is clear underneath the piece, we don't have to clear the bits first
+	;bicto	stamp_piece_ps_val,	stamp_piece_gb_val
+	addto	stamp_piece_ps_val,	stamp_piece_gb_val
+	jmp	stamp_piece_writeback
+stamp_piece_clear_op
+	bicto	stamp_piece_ps_val,	stamp_piece_gb_val
+stamp_piece_writeback
+	st	stamp_piece_gb_ptr,	stamp_piece_gb_wb_ptr
+stamp_piece_gb_wb_ptr	st	stamp_piece_gb_val,	0
+stamp_piece_loop_end	
+	; Increment pointers
+	inc	stamp_piece_ps_ptr
+	inc	stamp_piece_gb_ptr
+	incjne	tmp,	stamp_piece_loop
+stamp_piece_ret	jmp	0	; Return from subroutine
 
 ; Render board subroutine
 ;
@@ -455,7 +616,16 @@ rem_bits_A	; If Carry Clear
 rem_bits_loop_end	incjne	tmp,	rem_bits_loop	; Loop
 rem_bits_ret	jmp	0		; Return from subroutine
 
+; VARIABLES
 
+; Game state
+;
+lines_cleared	skip	1
+
+piece_kind	skip	1
+piece_rotation	skip	1
+piece_x	skip	1
+piece_y	skip	1
 
 ; Game board
 ;
