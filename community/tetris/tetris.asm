@@ -26,8 +26,8 @@
 ;
 
 ; Gameboard parameters
+; These constants are used for convenience. Changing the value won't change the actual sizes of the gameboards, code will need to be modified as well.
 GAMEBOARD_STRIDE	equ	2	; How many bytes high is the gameboard. 2 bytes = 16 rows.
-			; Some functions are hardcoded around the stride (eg. lineclearing). If this is changed, they will need to be altered.
 GAMEBOARD_COLS	equ	10	; How many columns wide is the gameboard. This is generic enough that it can be adjusted without altering any code.
 GAMEBOARD_SIZE	equ	(GAMEBOARD_STRIDE*GAMEBOARD_COLS)	; Gameboard total size = stride * columns
 
@@ -74,12 +74,15 @@ Z_CHAR	equ	A_CHAR+25
 
 ; Additional custom instructions
 ; To use these, call them like: insn INCTO_INSN aa, bb
+IMADD_INSN	equ	0xC0800000	; aa + [bb] --> [aa]. Immediate version of ADD. If aa is 0, allows single instruction LOAD of [bb] to [0].
 AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs [aa] and [bb], and stores in [aa].
+CLRA_INSN	equ	0x81000000	; Stores 0 --> [aa]. Implemented as [aa] & 0 --> [aa].
 INCTO_INSN	equ	0x08200000	; Stores [aa] + 1 --> [bb] in one instruction.
+ALTB_TOC_INSN	equ	0x00C00000	; Stores [aa] < [bb] --> Carry.
+ALEB_TOC_INSN	equ	0x00E00000	; Stores [aa] <= [bb] --> Carry.
+ST_JMP_INSN	equ	0x08080000	; Stores [aa] --> [bb] and jumps to bb.
 OUTC_JMP_INSN	equ	0x98080000	; Writes [aa] to the console and jumps to bb. WRA and WRB are set to make OUT write to console.
 LSR_JCC_INSN	equ	0x820A0000	; Rotates [aa] right, writes the result back to [aa], and jumps if the shifted out bit (carry output) was clear.
-ST_JMP_INSN	equ	0x08080000	; Stores [aa] --> [bb] and jumps to bb.
-
 
 ; Catch for any jumps to null (0x00). This usually indicates a subroutine hasn't had its return address set.
 ;
@@ -213,7 +216,8 @@ L_PIECE_FLIP	equ	0x74
 
 ; Start of application code
 ;
-test_piece_loop_n	skip	1
+test_piece_loop_i	skip	1
+test_piece_loop_j	skip	1
 
 run
 
@@ -247,28 +251,28 @@ run
 	; st	#%0001_1111,	gameboard+2
 	; st	#%0000_1111,	gameboard+0
 
-	; Top
-	st	#%0000_0010,	gameboard+19
-	st	#%0000_0010,	gameboard+17
-	st	#%0000_0010,	gameboard+15
-	st	#%0000_0011,	gameboard+13
-	st	#%0000_0010,	gameboard+11
-	st	#%0000_0010,	gameboard+9
-	st	#%0000_0010,	gameboard+7
-	st	#%0000_0010,	gameboard+5
-	st	#%0000_0111,	gameboard+3
-	st	#%0011_1111,	gameboard+1
-	; Bottom
-	st	#%0000_1111,	gameboard+18
-	st	#%0001_1111,	gameboard+16
-	st	#%0011_1111,	gameboard+14
-	st	#%1111_1111,	gameboard+12
-	st	#%0000_1111,	gameboard+10
-	st	#%0011_1111,	gameboard+8
-	st	#%0111_1111,	gameboard+6
-	st	#%0000_1111,	gameboard+4
-	st	#%1111_1101,	gameboard+2
-	st	#%1111_1111,	gameboard+0
+	; ; Top
+	; st	#%0000_0010,	gameboard+19
+	; st	#%0000_0010,	gameboard+17
+	; st	#%0000_0010,	gameboard+15
+	; st	#%0000_0011,	gameboard+13
+	; st	#%0000_0010,	gameboard+11
+	; st	#%0000_0010,	gameboard+9
+	; st	#%0000_0010,	gameboard+7
+	; st	#%0000_0010,	gameboard+5
+	; st	#%0000_0111,	gameboard+3
+	; st	#%0011_1111,	gameboard+1
+	; ; Bottom
+	; st	#%0000_1111,	gameboard+18
+	; st	#%0001_1111,	gameboard+16
+	; st	#%0011_1111,	gameboard+14
+	; st	#%1111_1111,	gameboard+12
+	; st	#%0000_1111,	gameboard+10
+	; st	#%0011_1111,	gameboard+8
+	; st	#%0111_1111,	gameboard+6
+	; st	#%0000_1111,	gameboard+4
+	; st	#%1111_1101,	gameboard+2
+	; st	#%1111_1111,	gameboard+0
 	
 	; Print game board
 	jsr	render_board_ret,	render_board
@@ -285,11 +289,17 @@ run
 	outc	#CR_CHAR
 	outc	#LF_CHAR
 	
-	st	#-7,	test_piece_loop_n
-test_piece_loop
+	st	#-7,	test_piece_loop_i
+test_piece_loop_a
+	clr	piece_rotation
+	st	#-4,	test_piece_loop_j
+test_piece_loop_b
+	; Clear any existing piece
+	jsr	clear_piece_stage_ret,	clear_piece_stage
+	
 	; Prepare a piece
 	st	piece_kind,	prep_piece_number
-	st	#0,	prep_piece_rot
+	st	piece_rotation,	prep_piece_rot
 	jsr	prep_piece_ret,	prep_piece
 	
 	; Stamp to board
@@ -306,36 +316,21 @@ test_piece_loop
 	st	#stamp_piece_clear_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
 	
-	; Prepare a piece
-	st	piece_kind,	prep_piece_number
-	st	#2,	prep_piece_rot
-	jsr	prep_piece_ret,	prep_piece
-	
-	; Stamp to board
-	st	#stamp_piece_merge_op,	stamp_piece_op
-	jsr	stamp_piece_ret,	stamp_piece
-	
-	; Print game board
-	jsr	render_board_ret,	render_board
-	
-	; Clear piece from board
-	st	#stamp_piece_clear_op,	stamp_piece_op
-	jsr	stamp_piece_ret,	stamp_piece
-	
-	outc	#CR_CHAR
-	outc	#LF_CHAR
-	
+	inc	piece_rotation
+	incjne	test_piece_loop_j,	test_piece_loop_b
 	inc	piece_kind
-	incjne	test_piece_loop_n,	test_piece_loop
+	incjne	test_piece_loop_i,	test_piece_loop_a
 	
 	; Halt
 	outc	#33	; !
 	halt
-	
+
 ; Prepare piece stage subroutine
 ; prep_piece_number = which piece to render. {0,1,2,3,4,5,6}
 ;
 ; Piece rotation. 4 different values for each direction. {0,1,2,3}.
+;
+; prep_piece_number is consumed during this operation.
 ;
 prep_piece_rot	skip	1
 prep_piece
@@ -354,7 +349,6 @@ prep_piece
 	addto	#prep_piece_jmp,	prep_piece_number
 	; Do the jump
 prep_piece_number	jmp	0
-	
 prep_piece_jmp	; Begin jump table
 	insn ST_JMP_INSN	#O_PIECE,	prep_piece_value
 	insn ST_JMP_INSN	#O_PIECE_FLIP,	prep_piece_value
@@ -370,9 +364,7 @@ prep_piece_jmp	; Begin jump table
 	insn ST_JMP_INSN	#J_PIECE_FLIP,	prep_piece_value
 	insn ST_JMP_INSN	#L_PIECE,	prep_piece_value
 	insn ST_JMP_INSN	#L_PIECE_FLIP,	prep_piece_value
-	
-	; prep_piece_value stores the jump table result.
-prep_piece_value	nop
+prep_piece_value	nop	; prep_piece_value stores the jump table result.
 
 	; If prep_piece_rot.0 is set, render horizontally, else render vertically.
 	jo	prep_piece_rot,	prep_piece_hor
@@ -380,24 +372,33 @@ prep_piece_vert
 	st	prep_piece_value,	piece_stage+5
 	andto	#0xF0,	piece_stage+5	; Clear lower 4 bits
 	st	#-4,	tmp
-prep_piece_shift_loop	lsl	prep_piece_value
-	incjne	tmp,	prep_piece_shift_loop
+prep_piece_vert_loop	lsl	prep_piece_value
+	incjne	tmp,	prep_piece_vert_loop
 	st	prep_piece_value,	piece_stage+3
 	jmp	prep_piece_ret
-	
-	; CASE 1: Horizontal
-prep_piece_hor	
-	; TODO
-	
+prep_piece_hor
+prep_piece_hor_i	equ	prep_piece_number	; Reuse prep_piece_number as the outer loop variable
+	st	#-3,	prep_piece_hor_i
+prep_piece_hor_loop_a
+	st	#(piece_stage+7),	prep_piece_hor_ptr
+prep_piece_hor_loop_b
+	st	prep_piece_hor_ptr,	prep_piece_hor_wb_ptr
+prep_piece_hor_ptr	insn IMADD_INSN	tmp,	0	; LOAD
+	lsr	prep_piece_value
+prep_piece_hor_wb_ptr	rorto	tmp,	0	; STORE
+	rsbto	#2,	prep_piece_hor_ptr
+	insn ALEB_TOC_INSN	#piece_stage,	prep_piece_hor_ptr
+	jcs	prep_piece_hor_loop_b		; Loop if #piece_stage <= prep_piece_hor_ptr
+	incjne	prep_piece_hor_i,	prep_piece_hor_loop_a
 prep_piece_ret	jmp	0
 
 ; Stamp piece board subroutine.
 ;
 ; This subroutine handles several functions:
 ;
-; * ADDing the pieceboard to the gameboard (Stamping the piece down)
-; * BICing the pieceboard to the gameboard (Clearing the piece off)
-; * Checking for any common bits (AND result > 0) between pieceboard and gameboard (Checking for collision).
+; * ADDing the piece_stage to the gameboard (Stamping the piece down)
+; * BICing the piece_stage to the gameboard (Clearing the piece off)
+; * Checking for any common bits (AND result > 0) between piece_stage and gameboard (Checking for collision).
 ;
 ; stamp_piece_op must be set to #stamp_piece_coll_op, #stamp_piece_merge_op, or #stamp_piece_clear_op before executing.
 ;
@@ -629,8 +630,6 @@ piece_y	skip	1
 
 ; Game board
 ;
-gameboard	skip	GAMEBOARD_SIZE
-;
 ; The gameboard is made up of bytes stacked vertically.
 ; There are two bytes end to end for each column, 10 colums wide.
 ; This makes a 16x10 game board, totalling 20 bytes.
@@ -658,10 +657,40 @@ gameboard	skip	GAMEBOARD_SIZE
 ; 0.2 2.2 4.2 6.2 8.2 10.2 12.2 14.2 16.2 18.2
 ; 0.1 2.1 4.1 6.1 8.1 10.1 12.1 14.1 16.1 18.1
 ; 0.0 2.0 4.0 6.0 8.0 10.0 12.0 14.0 16.0 18.0
+;
+; Neat trick: Since every instruction of the gameboard would normally be a HALT instruction and mostly wasted,
+; we can actually use the instruction to clear it's own B value. This gives us gameboard clearing and piece stage clearing "for free".
 
+	data	0xFF		; A wall for the gameboard to provide collisions at -1
+	data	0xFF
+clear_gameboard
+gameboard	;skip	GAMEBOARD_SIZE
+	insn CLRA_INSN	gameboard+0,	0
+	insn CLRA_INSN	gameboard+1,	0
+	insn CLRA_INSN	gameboard+2,	0
+	insn CLRA_INSN	gameboard+3,	0
+	insn CLRA_INSN	gameboard+4,	0
+	insn CLRA_INSN	gameboard+5,	0
+	insn CLRA_INSN	gameboard+6,	0
+	insn CLRA_INSN	gameboard+7,	0
+	insn CLRA_INSN	gameboard+8,	0
+	insn CLRA_INSN	gameboard+9,	0
+	insn CLRA_INSN	gameboard+10,	0
+	insn CLRA_INSN	gameboard+11,	0
+	insn CLRA_INSN	gameboard+12,	0
+	insn CLRA_INSN	gameboard+13,	0
+	insn CLRA_INSN	gameboard+14,	0
+	insn CLRA_INSN	gameboard+15,	0
+	insn CLRA_INSN	gameboard+16,	0
+	insn CLRA_INSN	gameboard+17,	0
+	insn CLRA_INSN	gameboard+18,	0
+	insn CLRA_INSN	gameboard+19,	0
+	insn 0x00000000	,	0xFF	; no-op/clc, but specified as custom instruction se we can set B value.
+	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at 11
+clear_gameboard_ret	jmp	0	; Return from subroutine
+	
 
 ; Piece stage
-piece_stage	skip	PIECE_STAGE_SIZE
 ;
 ; Piece stage layout (byte.bit):
 ;
@@ -681,6 +710,18 @@ piece_stage	skip	PIECE_STAGE_SIZE
 ; 0.2 2.2 4.2 6.2
 ; 0.1 2.1 4.1 6.1
 ; 0.0 2.0 4.0 6.0
+;
+clear_piece_stage
+piece_stage	;skip	PIECE_STAGE_SIZE
+	insn CLRA_INSN	piece_stage+0,	0
+	insn CLRA_INSN	piece_stage+1,	0
+	insn CLRA_INSN	piece_stage+2,	0
+	insn CLRA_INSN	piece_stage+3,	0
+	insn CLRA_INSN	piece_stage+4,	0
+	insn CLRA_INSN	piece_stage+5,	0
+	insn CLRA_INSN	piece_stage+6,	0
+	insn CLRA_INSN	piece_stage+7,	0
+clear_piece_stage_ret	jmp	0
 
 ; Placeholder label to easily see how big the program is from the symbol table
 END_OF_PROGRAM
