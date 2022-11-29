@@ -8,22 +8,24 @@
 ; * Gameboard format
 ; * Gameboard rendering to console
 ; * Line clearing
+; * Piece rendering for all pieces in any orientation
+; * Piece shifting with floor collision detection
+; * Piece stamping and clearing from gameboard
+; * Piece collision detection with gameboard
 ;
-; ~120 instructions left to implement the rest of TODO.
+; ~32 instructions left to implement the rest of TODO, probably more with test code removed.
 ;
 ; TODO:
 ;
-;
+; * Read user input
+; * Core game loop logic
+; 
 ; * Description with controls etc.
-; * Smarter temporary variable management.
-;       Define a small section of memory to use like a shared register pool.
-;       Go through the subroutines and replace dedicated temporary variables with shared variables from the register pool that haven't been used yet in the execution flow.
-;       Also inline most subroutines, most are called from a single spot.
-
 ;
 
+; =========
 ; Constants
-;
+; =========
 
 ; Gameboard parameters
 ; These constants are used for convenience. Changing the value won't change the actual sizes of the gameboards, code will need to be modified as well.
@@ -83,18 +85,6 @@ ALEB_TOC_INSN	equ	0x00E00000	; Stores [aa] <= [bb] --> Carry.
 ST_JMP_INSN	equ	0x08080000	; Stores [aa] --> [bb] and jumps to bb.
 OUTC_JMP_INSN	equ	0x98080000	; Writes [aa] to the console and jumps to bb. WRA and WRB are set to make OUT write to console.
 LSR_JCC_INSN	equ	0x820A0000	; Rotates [aa] right, writes the result back to [aa], and jumps if the shifted out bit (carry output) was clear.
-
-; Catch for any jumps to null (0x00). This usually indicates a subroutine hasn't had its return address set.
-;
-; Also used as a temporary storage register, and sometimes as the return value for subroutines that only need to return a status.
-
-	org	0x00
-tmp	halt
-
-; ENTRY POINT
-	org	0x01
-exec	jmp	run	; Jump to start of program
-
 
 ; Pieces templates
 ;
@@ -214,80 +204,38 @@ L_PIECE	equ	0x17
 ;0   4
 L_PIECE_FLIP	equ	0x74
 
-; Start of application code
+; ================
+; Application code
+; ================
+
+; Temporary variable tmp at address 0x00.
 ;
-test_piece_loop_i	skip	1
-test_piece_loop_j	skip	1
+; Used as a halt catch for any jumps to null (0x00). This usually indicates a subroutine hasn't had its return address set.
+; Also used as a temporary storage register, and sometimes as the return value for subroutines that only need to return a status.
 
+	org	0x00
+tmp	halt
+
+; ENTRY POINT
+	org	0x01
 run
-
-	clr	piece_kind
-	clr	piece_rotation
-	st	#3,	piece_x
-	clr	piece_y
-
-	; Setup testing gameboard
-	; Rotate your head to the left and squint
-	; Top
-	; st	#%1111_1111,	gameboard+19
-	; st	#%1111_0001,	gameboard+17
-	; st	#%1111_1001,	gameboard+15
-	; st	#%1111_1101,	gameboard+13
-	; st	#%1111_1111,	gameboard+11
-	; st	#%1111_1111,	gameboard+9
-	; st	#%1111_1101,	gameboard+7
-	; st	#%1111_1001,	gameboard+5
-	; st	#%1111_0001,	gameboard+3
-	; st	#%1111_1111,	gameboard+1
-	; ; Bottom
-	; st	#%0000_1111,	gameboard+18
-	; st	#%0001_1111,	gameboard+16
-	; st	#%0011_1111,	gameboard+14
-	; st	#%0111_1110,	gameboard+12
-	; st	#%1111_1100,	gameboard+10
-	; st	#%1111_1100,	gameboard+8
-	; st	#%0111_1110,	gameboard+6
-	; st	#%0011_1111,	gameboard+4
-	; st	#%0001_1111,	gameboard+2
-	; st	#%0000_1111,	gameboard+0
-
-	; ; Top
-	; st	#%0000_0010,	gameboard+19
-	; st	#%0000_0010,	gameboard+17
-	; st	#%0000_0010,	gameboard+15
-	; st	#%0000_0011,	gameboard+13
-	; st	#%0000_0010,	gameboard+11
-	; st	#%0000_0010,	gameboard+9
-	; st	#%0000_0010,	gameboard+7
-	; st	#%0000_0010,	gameboard+5
-	; st	#%0000_0111,	gameboard+3
-	; st	#%0011_1111,	gameboard+1
-	; ; Bottom
-	; st	#%0000_1111,	gameboard+18
-	; st	#%0001_1111,	gameboard+16
-	; st	#%0011_1111,	gameboard+14
-	; st	#%1111_1111,	gameboard+12
-	; st	#%0000_1111,	gameboard+10
-	; st	#%0011_1111,	gameboard+8
-	; st	#%0111_1111,	gameboard+6
-	; st	#%0000_1111,	gameboard+4
-	; st	#%1111_1101,	gameboard+2
-	; st	#%1111_1111,	gameboard+0
+	; Clear all variables and gameboard
+	jsr	reset_game_state_ret,	reset_game_state
 	
 	; Print game board
-	jsr	render_board_ret,	render_board
-	
-	outc	#CR_CHAR
-	outc	#LF_CHAR
-	
-	; Do line clear
-	jsr	line_clr_ret,	line_clr
-	
-	; Print game board
-	jsr	render_board_ret,	render_board
-	
-	outc	#CR_CHAR
-	outc	#LF_CHAR
+	; jsr	render_board_ret,	render_board
+	; 
+	; outc	#CR_CHAR
+	; outc	#LF_CHAR
+	; 
+	; ; Do line clear
+	; jsr	line_clr_ret,	line_clr
+	; 
+	; ; Print game board
+	; jsr	render_board_ret,	render_board
+	; 
+	; outc	#CR_CHAR
+	; outc	#LF_CHAR
 	
 	st	#-7,	test_piece_loop_i
 test_piece_loop_a
@@ -297,10 +245,33 @@ test_piece_loop_b
 	; Clear any existing piece
 	jsr	clear_piece_stage_ret,	clear_piece_stage
 	
-	; Prepare a piece
-	st	piece_kind,	prep_piece_number
-	st	piece_rotation,	prep_piece_rot
+	; Prepare a piece by rendering current piece_kind at piece_rotation
 	jsr	prep_piece_ret,	prep_piece
+	
+	; Shift piece
+	dec	piece_y
+	st	piece_y,	tmp
+	jsr	shift_piece_ret,	shift_piece
+	
+	; Check if collision occured. tmp will be non-zero if collision occured.
+	jne	tmp,	collision
+	
+	; Check if piece will collide with game board. tmp will be non-zero if collision occured.
+	st	#stamp_piece_coll_op,	stamp_piece_op
+	jsr	stamp_piece_ret,	stamp_piece
+	
+	; Check if collision occured. tmp will be non-zero if collision occured.
+	jne	tmp,	collision
+	
+	insn OUTC_JMP_INSN	#N_CHAR,	no_collision
+collision	outc	#C_CHAR
+no_collision
+	; TODO: What the logic should be:
+	; If we only collided with floor, don't move piece. Just stamp and get new piece.
+	; If we collided with the gameboard, reset rotation, x, and y. Re-render.
+
+	outc	#CR_CHAR
+	outc	#LF_CHAR
 	
 	; Stamp to board
 	st	#stamp_piece_merge_op,	stamp_piece_op
@@ -324,31 +295,37 @@ test_piece_loop_b
 	; Halt
 	outc	#33	; !
 	halt
+	
+test_piece_loop_i	skip	1
+test_piece_loop_j	skip	1
+
+; Choose the next piece kind.
+; TODO: Actual random generator. Currently only cycles through pieces.
+next_piece
+	inc	piece_kind
+	andto	#0x07,	piece_kind
+next_piece_ret	jmp	0
 
 ; Prepare piece stage subroutine
-; prep_piece_number = which piece to render. {0,1,2,3,4,5,6}
+; piece_kind = which piece to render. {0,1,2,3,4,5,6}
 ;
-; Piece rotation. 4 different values for each direction. {0,1,2,3}.
+; Piece rotation. 4 different values for each direction. {0,1,2,3}. Only uses bottom two bits, so can increment forever.
 ;
-; prep_piece_number is consumed during this operation.
-;
-prep_piece_rot	skip	1
 prep_piece
-	;andto	#0x03,	prep_piece_rot
-	;andto	#0x07,	prep_piece_number
+	st	piece_kind,	prep_piece_target	; We're rendering the current piece_kind
 	
 	; Calculate jump table address for piece value
 	;
 	; Jump address = prep_piece_jmp + (2 * prep_piece_number) + prep_piece_rot.1
 	;
 	; Get the second bit from prep_piece_rot into carry flag
-	lsrto	prep_piece_rot,	tmp
+	lsrto	piece_rotation,	tmp	; We're rendering the current piece_rotation
 	lsr	tmp
-	adcto	prep_piece_number,	prep_piece_number
+	adcto	prep_piece_target,	prep_piece_target
 	; Add jump table base address
-	addto	#prep_piece_jmp,	prep_piece_number
+	addto	#prep_piece_jmp,	prep_piece_target
 	; Do the jump
-prep_piece_number	jmp	0
+prep_piece_target	jmp	0
 prep_piece_jmp	; Begin jump table
 	insn ST_JMP_INSN	#O_PIECE,	prep_piece_value
 	insn ST_JMP_INSN	#O_PIECE_FLIP,	prep_piece_value
@@ -366,8 +343,8 @@ prep_piece_jmp	; Begin jump table
 	insn ST_JMP_INSN	#L_PIECE_FLIP,	prep_piece_value
 prep_piece_value	nop	; prep_piece_value stores the jump table result.
 
-	; If prep_piece_rot.0 is set, render horizontally, else render vertically.
-	jo	prep_piece_rot,	prep_piece_hor
+	; If piece_rotation.0 is set, render horizontally, else render vertically.
+	jo	piece_rotation,	prep_piece_hor
 prep_piece_vert
 	st	prep_piece_value,	piece_stage+5
 	andto	#0xF0,	piece_stage+5	; Clear lower 4 bits
@@ -377,7 +354,7 @@ prep_piece_vert_loop	lsl	prep_piece_value
 	st	prep_piece_value,	piece_stage+3
 	jmp	prep_piece_ret
 prep_piece_hor
-prep_piece_hor_i	equ	prep_piece_number	; Reuse prep_piece_number as the outer loop variable
+prep_piece_hor_i	equ	prep_piece_target		; Reuse prep_piece_target as the outer loop variable.
 	st	#-3,	prep_piece_hor_i
 prep_piece_hor_loop_a
 	st	#(piece_stage+7),	prep_piece_hor_ptr
@@ -392,6 +369,53 @@ prep_piece_hor_wb_ptr	rorto	tmp,	0	; STORE
 	incjne	prep_piece_hor_i,	prep_piece_hor_loop_a
 prep_piece_ret	jmp	0
 
+; shift_piece subroutine.
+;
+; Shifts the piece stage downwards by the set amount stored negated in tmp.
+; If the piece is shifted to the bottom of the board, stops and returns non-zero in tmp.
+;
+; Fixed method: 16 instructions total
+shift_piece
+shift_piece_loop
+	jo	piece_stage+6,	shift_piece_ret
+	jo	piece_stage+4,	shift_piece_ret
+	jo	piece_stage+2,	shift_piece_ret
+	jo	piece_stage+0,	shift_piece_ret
+	
+	lsr	piece_stage+7
+	ror	piece_stage+6
+	lsr	piece_stage+5
+	ror	piece_stage+4
+	lsr	piece_stage+3
+	ror	piece_stage+2
+	lsr	piece_stage+1
+	ror	piece_stage+0
+	
+	incjne	tmp,	shift_piece_loop
+shift_piece_ret	jmp	0		; Return from subroutine
+
+; Indirect method: 16 instructions total
+;shift_piece
+;	st	#(piece_stage+6),	shift_piece_ptr_1
+;shift_piece_loop
+;	insn INCTO_INSN	shift_piece_ptr_1,	shift_piece_ptr_0
+
+;shift_piece_val_1	insn CLRA_INSN	shift_piece_val_1,	0	; Self clearing variable shift_piece_val_1
+;shift_piece_ptr_1	add	shift_piece_val_1,	0	; LOAD
+;	jo	shift_piece_val_1,	shift_piece_collide
+
+;shift_piece_val_0	insn CLRA_INSN	shift_piece_val_0,	0	; Self clearing variable shift_piece_val_0
+;shift_piece_ptr_0	add	shift_piece_val_0,	0	; LOAD
+;	st	shift_piece_ptr_0,	shift_piece_wb_ptr_0
+;	st	shift_piece_ptr_1,	shift_piece_wb_ptr_1
+;shift_piece_wb_ptr_0	lsrto	shift_piece_val_0,	0	; ROR STORE
+;shift_piece_wb_ptr_1	rorto	shift_piece_val_1,	0	; ROR STORE
+;	rsbto	#2,	shift_piece_ptr_1
+;	incjne	tmp,	shift_piece_loop
+;	jmp	shift_piece_ret
+;shift_piece_collide	st	#1,	tmp
+;shift_piece_ret	jmp	0		; Return from subroutine
+
 ; Stamp piece board subroutine.
 ;
 ; This subroutine handles several functions:
@@ -404,24 +428,22 @@ prep_piece_ret	jmp	0
 ;
 ; When executing stamp_piece_coll_op, tmp will be non-zero if a collision occured.
 ;
-stamp_piece_ps_val	skip	1
-stamp_piece_gb_val	skip	1
 stamp_piece
 	
 	; Prep pointers
 	st	#piece_stage,	stamp_piece_ps_ptr
 	st	#gameboard,	stamp_piece_gb_ptr
-	st	piece_x,	tmp
-	lsl	tmp	; Multiply piece_x by 2 to get gameboard ptr offset
-	addto	tmp,	stamp_piece_gb_ptr
+	addto	piece_x,	stamp_piece_gb_ptr
+	addto	piece_x,	stamp_piece_gb_ptr	; stamp_piece_gb_ptr = #gameboard + 2 * piece_x
 	
 	; Prep loop
 	st	#-PIECE_STAGE_SIZE,	tmp
 stamp_piece_loop
-	clr	stamp_piece_ps_val
+
+stamp_piece_ps_val	insn CLRA_INSN	stamp_piece_ps_val,	0	; Self clearing variable stamp_piece_ps_val
 stamp_piece_ps_ptr	add	stamp_piece_ps_val,	0	; Piece stage LOAD
 	
-	clr	stamp_piece_gb_val
+stamp_piece_gb_val	insn CLRA_INSN	stamp_piece_gb_val,	0	; Self clearing variable stamp_piece_gb_val
 stamp_piece_gb_ptr	add	stamp_piece_gb_val,	0	; Game board LOAD
 
 	; Now do the operation specified.
@@ -429,9 +451,9 @@ stamp_piece_op	jmp	0	; This is set before calling the subroutine
 	
 stamp_piece_coll_op	; Check for collision
 	andto	stamp_piece_ps_val,	stamp_piece_gb_val
-	je	stamp_piece_gb_val,	stamp_piece_loop_end
+	je	stamp_piece_gb_val,	stamp_piece_loop_end	; Collision occured.
 	st	stamp_piece_gb_val,	tmp	; Store colliding bits in tmp
-	jmp	stamp_piece_ret
+	jmp	stamp_piece_ret		; Break out of loop and exit
 stamp_piece_merge_op
 	; Since we know the gameboard is clear underneath the piece, we don't have to clear the bits first
 	;bicto	stamp_piece_ps_val,	stamp_piece_gb_val
@@ -444,7 +466,7 @@ stamp_piece_writeback
 stamp_piece_gb_wb_ptr	st	stamp_piece_gb_val,	0
 stamp_piece_loop_end	
 	; Increment pointers
-	inc	stamp_piece_ps_ptr
+	inc	stamp_piece_ps_ptr	; TODO: Replace with an inca -> a instruction (TODO: Available variable storage)
 	inc	stamp_piece_gb_ptr
 	incjne	tmp,	stamp_piece_loop
 stamp_piece_ret	jmp	0	; Return from subroutine
@@ -459,15 +481,11 @@ stamp_piece_ret	jmp	0	; Return from subroutine
 ; LOOP C: Work along the columns from 0 to 10, incrementing the gameboard ptr by 2 each iteration.
 ;         Decide whether to render a block or empty character by ANDing the gameboard ptr value with the current bitmask
 
-; Temporary variables for internal use
-render_board_mask	skip	1 ; The row bitmask for selecting the row to render
-render_board_col	skip	1 ; The current column iteration loop counter.
-
 render_board
 	st	#(GAMEBOARD_STRIDE-1),	render_board_ptr	; Start the render_board_ptr with an offset of 1 to render the top half of the board.
 ; LOOP A
 render_board_loop_a
-	addto	#gameboard,	render_board_ptr	; Adjust the render_board_ptr to point into the gameboard
+	addto	#gameboard,	render_board_ptr	; Adjust the render_board_ptr to point into the gameboard. TODO: Move out of loop after implementing ALEB_TOC_INSN below since this won't be changed.
 	st	#%1000_0000,	render_board_mask	; Initialize the bitmask for testing the column byte for which row is set
 ; LOOP B
 render_board_loop_b
@@ -480,7 +498,7 @@ render_board_ptr	insn AND_INSN	tmp,	0	; Indirect AND, store result in tmp
 	; Print a block or an empty cell depending whether the board & mask > 0
 	jne	tmp,	render_board_print_a
 	insn OUTC_JMP_INSN	#EMPTY_CHAR,	render_board_print_b	; Print empty char and jump over the block char print
-render_board_print_a	outc	#BLOCK_CHAR
+render_board_print_a	outc	#BLOCK_CHAR		; TODO: Available variable storage
 render_board_print_b
 	addto	#GAMEBOARD_STRIDE,	render_board_ptr	; Move onto next column byte
 	incjne	render_board_col,	render_board_loop_c	; If we still have columns to render, continue LOOP C
@@ -488,8 +506,9 @@ render_board_print_b
 	rsbto	#GAMEBOARD_SIZE,	render_board_ptr	; Reset render_board_ptr to pre-loop state
 	
 	; Newline to move down to the next row on the console
-	outc	#CR_CHAR
-	outc	#LF_CHAR
+	; outc ignores bb, allowing it to be used as variable storage.
+render_board_mask	outc	#CR_CHAR		; render_board_mask: The row bitmask for selecting the row to render
+render_board_col	outc	#LF_CHAR		; render_board_col: The current column iteration loop counter.
 
 	;lsr	render_board_mask		; Logical shift right (0 into top spot). This moves down a row.
 	;jcc	render_board_loop_b		; If we haven't shifted the bitmask all the way out, continue LOOP B.
@@ -497,7 +516,7 @@ render_board_print_b
 ; END LOOP B
 	; Offset the render_board_ptr by -1 so the next loop operates over the next lower 8 rows of the board.
 	; Also subtract the gameboard address so we can compare with zero. This is added back on at the start of render_board_loop_a.
-	rsbto	#(gameboard+1),	render_board_ptr
+	rsbto	#(gameboard+1),	render_board_ptr	; TODO: Can replace with ALEB_TOC_INSN + jcs
 	; If the render_board_ptr is now < 0, we have just rendered the lowest 8 rows of the board and are done.
 	jge	render_board_ptr,	render_board_loop_a	; Otherwise continue LOOP A.
 ; END LOOP A
@@ -512,7 +531,7 @@ render_board_ret	jmp	0		; Return from subroutine.
 ; 2. Call rem_bits on each column in the gameboard with a copy of the complete rows bitmask.
 ; 3. Copy the result back over the gameboard.
 ;
-line_clr_i	skip	1	; We cannot use tmp as loop counter since we call subroutines which overwrite tmp.
+;line_clr_i	skip	1	; We cannot use tmp as loop counter since we call subroutines which overwrite tmp.
 line_clr
 	; Generate the line clear mask. Result in get_full_lines_mask.
 	jsr	get_full_lines_ret,	get_full_lines
@@ -526,8 +545,8 @@ line_clr
 
 line_clr_do_remove
 	; Prep work. Ensure rem_bits_value is zeroed.
-	clr	rem_bits_value+0
-	clr	rem_bits_value+1
+line_clr_i	insn CLRA_INSN	rem_bits_value+0,	0	; Used as variable storage for line_clr_i
+	insn CLRA_INSN	rem_bits_value+1,	0	; TODO: Available variable storage
 
 	; Iterate over each column and call the rem_bits subroutine to remove the bits from the column.
 	st	#(-GAMEBOARD_COLS),	line_clr_i	; Prep the loop counter
@@ -545,7 +564,7 @@ line_clr_loop
 
 	; Load the current column into the rem_bits subroutine rem_bits_value input
 	insn INCTO_INSN	line_clr_read_ptr_0,	line_clr_read_ptr_1	; Prep ptr +1
-	; No need to pre-clear load destination since it is zeroed by the subroutine every iteration.
+	; No need to pre-clear load destination since it is zeroed by the rem_bits subroutine from the previous loop.
 line_clr_read_ptr_0	add	rem_bits_value+0,	0	; Load +0
 line_clr_read_ptr_1	add	rem_bits_value+1,	0	; Load +1
 
@@ -570,7 +589,6 @@ line_clr_ret	jmp	0		; Return from subroutine
 ; This is the bitwise AND of all columns in the gameboard.
 ;
 get_full_lines_mask	skip	2
-
 get_full_lines
 	st	#(-GAMEBOARD_COLS),	tmp
 	st	#0xFF,	get_full_lines_mask+0
@@ -595,11 +613,11 @@ get_full_lines_ret	jmp	0		; Return from subroutine
 ;
 rem_bits_mask	skip	2
 rem_bits_value	skip	2
-rem_bits_result	skip	2
 rem_bits
-	; Pre-clear the result
-	clr	rem_bits_result+0
-	clr	rem_bits_result+1
+	; Pre-clear the result	
+rem_bits_result	insn CLRA_INSN	rem_bits_result+0,	0	; Self clearing variables
+	insn CLRA_INSN	rem_bits_result+1,	0
+	
 	st	#-16,	tmp	; Loop 16 times
 rem_bits_loop
 	lsl	rem_bits_mask+0		; Logical shift left mask (0 -> bit 0)
@@ -621,12 +639,16 @@ rem_bits_ret	jmp	0		; Return from subroutine
 
 ; Game state
 ;
-lines_cleared	skip	1
-
-piece_kind	skip	1
-piece_rotation	skip	1
 piece_x	skip	1
-piece_y	skip	1
+
+; reset_game_state: Resets all game variables and the game board.
+reset_game_state
+
+lines_cleared	insn CLRA_INSN	lines_cleared,	0
+piece_kind	insn CLRA_INSN	piece_kind,	0
+piece_rotation	insn CLRA_INSN	piece_rotation,	0
+piece_y	insn CLRA_INSN	piece_y,	0
+	st	#3,	piece_x
 
 ; Game board
 ;
@@ -661,10 +683,9 @@ piece_y	skip	1
 ; Neat trick: Since every instruction of the gameboard would normally be a HALT instruction and mostly wasted,
 ; we can actually use the instruction to clear it's own B value. This gives us gameboard clearing and piece stage clearing "for free".
 
-	data	0xFF		; A wall for the gameboard to provide collisions at -1
-	data	0xFF
-clear_gameboard
-gameboard	;skip	GAMEBOARD_SIZE
+	insn 0x00000000	,	0xFF		; A wall for the gameboard to provide collisions at -1
+	insn 0x00000000	,	0xFF
+gameboard
 	insn CLRA_INSN	gameboard+0,	0
 	insn CLRA_INSN	gameboard+1,	0
 	insn CLRA_INSN	gameboard+2,	0
@@ -687,7 +708,7 @@ gameboard	;skip	GAMEBOARD_SIZE
 	insn CLRA_INSN	gameboard+19,	0
 	insn 0x00000000	,	0xFF	; no-op/clc, but specified as custom instruction se we can set B value.
 	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at 11
-clear_gameboard_ret	jmp	0	; Return from subroutine
+reset_game_state_ret	jmp	0
 	
 
 ; Piece stage
