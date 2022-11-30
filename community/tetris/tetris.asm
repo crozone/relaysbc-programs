@@ -17,7 +17,6 @@
 ;
 ; TODO:
 ;
-; * Collision of piece stage with gameboard isn't being detected correctly.
 ; * Game over (Current code infinite loops on game over)
 ; * Scorekeeping
 ;
@@ -227,11 +226,8 @@ main_next_piece
 	; TODO: Actual random generator. Currently only cycles through pieces.
 	inc	piece_kind
 	andto	#0x07,	piece_kind
+	
 	; Set location and rotation
-	;st	#3,	piece_x
-	;st	#0,	piece_y
-	;st	#0,	piece_rotation
-	;jsr	save_piece_state_ret,	save_piece_state
 	st	#3,	prev_piece_x
 	st	#0,	prev_piece_y
 	st	#0,	prev_piece_rotation
@@ -255,7 +251,6 @@ main_render_fresh_piece
 	; Check if there is going to be a collision
 	st	#stamp_piece_coll_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
-	
 	jne	tmp,	main_undo_then_render	; We have a collision. Undo changes and re-render.
 main_no_collision
 main_full_render
@@ -266,6 +261,14 @@ main_full_render
 	; Print game board to console
 	jsr	render_board_ret,	render_board
 	
+	; If stamp flag set, do not clear piece. Instead, jump to main_next_piece.
+	jeq	stamp_flag,	main_full_render_clr
+	; Check line clear
+	jsr	line_clr_ret,	line_clr
+	; Clear stamp flag
+stamp_flag	insn CLRA_INSN	stamp_flag,	0
+	jmp	main_next_piece
+main_full_render_clr	
 	; Clear piece from board
 	st	#stamp_piece_clear_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
@@ -321,35 +324,35 @@ main_read_input
 	outc	#0x3F	; Print '?'	TODO: Available variable storage
 	jmp	main_read_input
 main_move_drop
-	; Do drop
+	; Move piece y down, and also shift piece stage down
 	st	#-1,	tmp
 	addto	tmp,	piece_y
 	jsr	shift_piece_ret,	shift_piece
-	; If the piece collided with the floor:
-	; * Stamp the piece to the board
-	; * Restart the main game loop to selecting the next piece
-	; Clear piece from board
-	jeq	tmp,	main_check_new_state
-	st	#stamp_piece_merge_op,	stamp_piece_op
+	
+	; Check collision with floor
+	jeq	tmp,	main_move_drop_2
+	st	#1,	stamp_flag
+	jmp	main_full_render
+main_move_drop_2
+	; Check collision with gameboard
+	st	#stamp_piece_coll_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
-	jmp	main_next_piece
+	jeq	tmp,	main_full_render
+	st	#1,	stamp_flag
+	jmp	main_undo_then_render
 main_move_left
 	dec	piece_x
-	jmp	main_check_new_state
+	jmp	main_full_render
 main_move_right
 	inc	piece_x
-	jmp	main_check_new_state
+	jmp	main_full_render
 main_rot_left
 	dec	piece_rotation
-	jmp	main_check_new_state
+	jmp	main_render_fresh_piece
 main_rot_right
 	inc	piece_rotation
-	;jmp	main_check_new_state
-main_check_new_state
-	incjne	test_loop_i,	main_render_fresh_piece
-	;jmp	main_render_fresh_piece
+	jmp	main_render_fresh_piece
 main_end
-test_loop_i	data	-64
 
 save_piece_state
 	st	piece_rotation,	prev_piece_rotation
@@ -483,7 +486,8 @@ stamp_piece_op	jmp	0	; This is set before calling the subroutine
 	
 stamp_piece_coll_op	; Check for collision
 	andto	stamp_piece_ps_val,	stamp_piece_gb_val
-	je	stamp_piece_gb_val,	stamp_piece_loop_end	; Collision occured.
+	jeq	stamp_piece_gb_val,	stamp_piece_loop_end	; If collision didn't occur, keep looping.
+	; Collision occured.
 	st	stamp_piece_gb_val,	tmp	; Store colliding bits in tmp
 	jmp	stamp_piece_ret		; Break out of loop and exit
 stamp_piece_merge_op
@@ -530,7 +534,8 @@ render_board_ptr	insn AND_INSN	tmp,	0	; Indirect AND, store result in tmp
 	; Print a block or an empty cell depending whether the board & mask > 0
 	jne	tmp,	render_board_print_a
 	insn OUTC_JMP_INSN	#EMPTY_CHAR,	render_board_print_b	; Print empty char and jump over the block char print
-render_board_print_a	outc	#BLOCK_CHAR		; TODO: Available variable storage
+render_board_print_a
+	outc	#BLOCK_CHAR		; TODO: Available variable storage
 render_board_print_b
 	addto	#GAMEBOARD_STRIDE,	render_board_ptr	; Move onto next column byte
 	incjne	render_board_col,	render_board_loop_c	; If we still have columns to render, continue LOOP C
