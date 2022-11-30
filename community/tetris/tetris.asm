@@ -3,24 +3,21 @@
 ;
 ; Run from 0x01.
 ;
-; Completed:
+; Controls:
 ;
-; * Gameboard format
-; * Gameboard rendering to console
-; * Line clearing
-; * Piece rendering for all pieces in any orientation
-; * Piece shifting with floor collision detection
-; * Piece stamping and clearing from gameboard
-; * Piece collision detection with gameboard
+; Relay computer numpad is used to control game.
 ;
-; ~32 instructions left to implement the rest of TODO, probably more with test code removed.
+; 4: Move piece left
+; 6: Move piece right
+; 2: Move piece down
+; 7: Rotate piece left
+; 9: Rotate piece right
+;
+; Game is rendered to console output.
 ;
 ; TODO:
 ;
-; * Read user input
-; * Core game loop logic
-; 
-; * Description with controls etc.
+; * Current code infinite loops on game over. There are no instructions free to detect this and halt.
 ;
 
 ; =========
@@ -218,86 +215,143 @@ tmp	halt
 
 ; ENTRY POINT
 	org	0x01
-run
+main
 	; Clear all variables and gameboard
 	jsr	reset_game_state_ret,	reset_game_state
-	
-	; Print game board
-	; jsr	render_board_ret,	render_board
-	; 
-	; outc	#CR_CHAR
-	; outc	#LF_CHAR
-	; 
-	; ; Do line clear
-	; jsr	line_clr_ret,	line_clr
-	; 
-	; ; Print game board
-	; jsr	render_board_ret,	render_board
-	; 
-	; outc	#CR_CHAR
-	; outc	#LF_CHAR
-	
-	st	#-7,	test_piece_loop_i
-test_piece_loop_a
-	clr	piece_rotation
-	st	#-4,	test_piece_loop_j
-test_piece_loop_b
-	; Clear any existing piece
+main_next_piece
+	; Select piece
+	jsr	next_piece_ret,	next_piece
+	; Set location and rotation
+	st	#3,	piece_x
+	st	#-1,	piece_y
+	st	#0,	piece_rotation
+	jsr	save_piece_state_ret,	save_piece_state
+main_render_fresh_piece
+	; Clear any existing piece from the stage
 	jsr	clear_piece_stage_ret,	clear_piece_stage
 	
 	; Prepare a piece by rendering current piece_kind at piece_rotation
 	jsr	prep_piece_ret,	prep_piece
 	
-	; Shift piece
-	dec	piece_y
+	; Shift the piece to the correct y
 	st	piece_y,	tmp
 	jsr	shift_piece_ret,	shift_piece
 	
-	; Check if collision occured. tmp will be non-zero if collision occured.
-	jne	tmp,	collision
+	; If tmp is non-zero, piece collided with the bottom of the board.
+	; Since the player isn't attempting to drop the piece, and we're re-rendering the state,
+	; we don't actually care if there was a floor collision.
+	; We only care if there's a gameboard collision.
 	
-	; Check if piece will collide with game board. tmp will be non-zero if collision occured.
+	; Check if there is going to be a collision
 	st	#stamp_piece_coll_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
 	
-	; Check if collision occured. tmp will be non-zero if collision occured.
-	jne	tmp,	collision
-	
-	insn OUTC_JMP_INSN	#N_CHAR,	no_collision
-collision	outc	#C_CHAR
-no_collision
-	; TODO: What the logic should be:
-	; If we only collided with floor, don't move piece. Just stamp and get new piece.
-	; If we collided with the gameboard, reset rotation, x, and y. Re-render.
-
-	outc	#CR_CHAR
-	outc	#LF_CHAR
-	
+	jeq	tmp,	main_no_collision
+	; We have a collision. Undo changes and re-render.
+	jsr	undo_piece_state_ret,	undo_piece_state
+	jmp	main_render_fresh_piece
+main_no_collision
+main_full_render
 	; Stamp to board
 	st	#stamp_piece_merge_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
-	
 	; Print game board
 	jsr	render_board_ret,	render_board
-	
-	outc	#CR_CHAR
-	outc	#LF_CHAR
+	jsr	save_piece_state_ret,	save_piece_state
 	
 	; Clear piece from board
 	st	#stamp_piece_clear_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
-	
+
+	; ----------
+	; Read input
+	; ----------
+main_read_input	inwait	tmp
+	; Input is from relay computer keypad, and will be 0-F (0-15).
+	; Zero high bits to allow some compatibility with keyboard input, Eg, a-o = 1-F
+	andto	#0x0F,	tmp
+	; --------------
+	; Input 2 = Drop
+	; --------------
+	rsbto	#02,	tmp
+	jeq	tmp,	main_move_drop
+	; --------------
+	; Input 4 = Left
+	; --------------
+	rsbto	#02,	tmp
+	jeq	tmp,	main_move_left
+	; --------------
+	; Input 6 = Right
+	; --------------
+	rsbto	#02,	tmp
+	jeq	tmp,	main_move_right
+	; --------------
+	; Input 7 = Rotate left
+	; --------------
+	rsbto	#01,	tmp
+	jeq	tmp,	main_rot_left
+	; --------------
+	; Input 9 = Rotate right
+	; --------------
+	rsbto	#02,	tmp
+	jeq	tmp,	main_rot_right
+
+	; Unknown input, go back to reading
+	outc	#0x3F	; Print '?'
+	jmp	main_read_input
+main_move_drop
+	; Do drop
+	st	#-1,	tmp
+	addto	tmp,	piece_y
+	jsr	shift_piece_ret,	shift_piece
+	; If the piece collided with the floor:
+	; * Stamp the piece to the board
+	; * Restart the main game loop to selecting the next piece
+	; Clear piece from board
+	jeq	tmp,	main_check_new_state
+	st	#stamp_piece_merge_op,	stamp_piece_op
+	jsr	stamp_piece_ret,	stamp_piece
+	jmp	main_next_piece
+main_move_left
+	dec	piece_x
+	jmp	main_check_new_state
+main_move_right
+	inc	piece_x
+	jmp	main_check_new_state
+main_rot_left
+	dec	piece_rotation
+	jmp	main_check_new_state
+main_rot_right
 	inc	piece_rotation
-	incjne	test_piece_loop_j,	test_piece_loop_b
-	inc	piece_kind
-	incjne	test_piece_loop_i,	test_piece_loop_a
+	;jmp	main_check_new_state
+main_check_new_state
+	; Check for collision
+	st	#stamp_piece_coll_op,	stamp_piece_op
+	jsr	stamp_piece_ret,	stamp_piece
+	jeq	tmp,	main_new_state_pass
+	; There was a collision
+	; Restore the previous state
+	jsr	undo_piece_state_ret,	undo_piece_state
 	
+main_new_state_pass
+	; Re-render the board
+	jmp	main_render_fresh_piece
+
 	; Halt
-	outc	#33	; !
-	halt
-	
-test_piece_loop_i	skip	1
-test_piece_loop_j	skip	1
+;main_end	outc	#33	; !
+;	halt
+
+save_piece_state
+	st	piece_rotation,	prev_piece_rotation
+	st	piece_x,	prev_piece_x
+	st	piece_y,	prev_piece_y
+save_piece_state_ret	jmp	0
+
+undo_piece_state
+	st	prev_piece_rotation,	piece_rotation
+	st	prev_piece_x,	piece_x
+	st	prev_piece_y,	piece_y
+undo_piece_state_ret	jmp	0
 
 ; Choose the next piece kind.
 ; TODO: Actual random generator. Currently only cycles through pieces.
@@ -415,6 +469,22 @@ shift_piece_ret	jmp	0		; Return from subroutine
 ;	jmp	shift_piece_ret
 ;shift_piece_collide	st	#1,	tmp
 ;shift_piece_ret	jmp	0		; Return from subroutine
+
+; shift_piece_up: Shift the piece stage up one unit.
+;
+; Note: Only use this if we have instruction space.
+; The alternative is to re-render the entire piece stage if there is a collision, but it's much slower.
+;
+; shift_piece_up
+; 	lsl	piece_stage+0
+; 	rol	piece_stage+1
+; 	lsl	piece_stage+2
+; 	rol	piece_stage+3
+; 	lsl	piece_stage+4
+; 	rol	piece_stage+5
+; 	lsl	piece_stage+6
+; 	rol	piece_stage+7
+; shift_piece_up_ret	jmp	0
 
 ; Stamp piece board subroutine.
 ;
@@ -639,8 +709,6 @@ rem_bits_ret	jmp	0		; Return from subroutine
 
 ; Game state
 ;
-piece_x	skip	1
-
 ; reset_game_state: Resets all game variables and the game board.
 reset_game_state
 
@@ -648,7 +716,10 @@ lines_cleared	insn CLRA_INSN	lines_cleared,	0
 piece_kind	insn CLRA_INSN	piece_kind,	0
 piece_rotation	insn CLRA_INSN	piece_rotation,	0
 piece_y	insn CLRA_INSN	piece_y,	0
-	st	#3,	piece_x
+piece_x	insn CLRA_INSN	piece_x,	0
+prev_piece_rotation	insn CLRA_INSN	prev_piece_rotation,	0
+prev_piece_y	insn CLRA_INSN	prev_piece_y,	0
+prev_piece_x	insn CLRA_INSN	prev_piece_x,	0
 
 ; Game board
 ;
