@@ -17,7 +17,9 @@
 ;
 ; TODO:
 ;
-; * Current code infinite loops on game over. There are no instructions free to detect this and halt.
+; * Collision of piece stage with gameboard isn't being detected correctly.
+; * Game over (Current code infinite loops on game over)
+; * Scorekeeping
 ;
 
 ; =========
@@ -82,6 +84,7 @@ ALEB_TOC_INSN	equ	0x00E00000	; Stores [aa] <= [bb] --> Carry.
 ST_JMP_INSN	equ	0x08080000	; Stores [aa] --> [bb] and jumps to bb.
 OUTC_JMP_INSN	equ	0x98080000	; Writes [aa] to the console and jumps to bb. WRA and WRB are set to make OUT write to console.
 LSR_JCC_INSN	equ	0x820A0000	; Rotates [aa] right, writes the result back to [aa], and jumps if the shifted out bit (carry output) was clear.
+INCJMP_INSN	equ	0x80240000	; Stores [aa] + 1 --> [aa] and unconditionally jumps to bb
 
 ; Pieces templates
 ;
@@ -211,6 +214,7 @@ L_PIECE_FLIP	equ	0x74
 ; Also used as a temporary storage register, and sometimes as the return value for subroutines that only need to return a status.
 
 	org	0x00
+stop
 tmp	halt
 
 ; ENTRY POINT
@@ -219,13 +223,19 @@ main
 	; Clear all variables and gameboard
 	jsr	reset_game_state_ret,	reset_game_state
 main_next_piece
-	; Select piece
-	jsr	next_piece_ret,	next_piece
+	; Choose the next piece kind.
+	; TODO: Actual random generator. Currently only cycles through pieces.
+	inc	piece_kind
+	andto	#0x07,	piece_kind
 	; Set location and rotation
-	st	#3,	piece_x
-	st	#-1,	piece_y
-	st	#0,	piece_rotation
-	jsr	save_piece_state_ret,	save_piece_state
+	;st	#3,	piece_x
+	;st	#0,	piece_y
+	;st	#0,	piece_rotation
+	;jsr	save_piece_state_ret,	save_piece_state
+	st	#3,	prev_piece_x
+	st	#0,	prev_piece_y
+	st	#0,	prev_piece_rotation
+main_undo_then_render	jsr	undo_piece_state_ret,	undo_piece_state
 main_render_fresh_piece
 	; Clear any existing piece from the stage
 	jsr	clear_piece_stage_ret,	clear_piece_stage
@@ -246,30 +256,41 @@ main_render_fresh_piece
 	st	#stamp_piece_coll_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
 	
-	jeq	tmp,	main_no_collision
-	; We have a collision. Undo changes and re-render.
-	jsr	undo_piece_state_ret,	undo_piece_state
-	jmp	main_render_fresh_piece
+	jne	tmp,	main_undo_then_render	; We have a collision. Undo changes and re-render.
 main_no_collision
 main_full_render
 	; Stamp to board
 	st	#stamp_piece_merge_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
-	; Print game board
+	
+	; Print game board to console
 	jsr	render_board_ret,	render_board
-	jsr	save_piece_state_ret,	save_piece_state
 	
 	; Clear piece from board
 	st	#stamp_piece_clear_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
+	
+	; Save the piece state so that if the change causes a collision, previous state can be restored.
+	jsr	save_piece_state_ret,	save_piece_state
 
 	; ----------
 	; Read input
 	; ----------
-main_read_input	inwait	tmp
+main_read_input
+	;inwait	tmp
+	st	#2,	tmp		; TEST
 	; Input is from relay computer keypad, and will be 0-F (0-15).
 	; Zero high bits to allow some compatibility with keyboard input, Eg, a-o = 1-F
 	andto	#0x0F,	tmp
+	
+	; TODO: One posibility to save instructions:
+	; Use a jump table here. Fill the gaps with variables like:
+	; * get_full_lines_mask	skip	2
+	; * rem_bits_mask	skip	2
+	; * rem_bits_value	skip	2
+	;
+	; Downside is that any invalid input would crash the game.
+	
 	; --------------
 	; Input 2 = Drop
 	; --------------
@@ -297,7 +318,7 @@ main_read_input	inwait	tmp
 	jeq	tmp,	main_rot_right
 
 	; Unknown input, go back to reading
-	outc	#0x3F	; Print '?'
+	outc	#0x3F	; Print '?'	TODO: Available variable storage
 	jmp	main_read_input
 main_move_drop
 	; Do drop
@@ -325,21 +346,10 @@ main_rot_right
 	inc	piece_rotation
 	;jmp	main_check_new_state
 main_check_new_state
-	; Check for collision
-	st	#stamp_piece_coll_op,	stamp_piece_op
-	jsr	stamp_piece_ret,	stamp_piece
-	jeq	tmp,	main_new_state_pass
-	; There was a collision
-	; Restore the previous state
-	jsr	undo_piece_state_ret,	undo_piece_state
-	
-main_new_state_pass
-	; Re-render the board
-	jmp	main_render_fresh_piece
-
-	; Halt
-;main_end	outc	#33	; !
-;	halt
+	incjne	test_loop_i,	main_render_fresh_piece
+	;jmp	main_render_fresh_piece
+main_end
+test_loop_i	data	-64
 
 save_piece_state
 	st	piece_rotation,	prev_piece_rotation
@@ -352,13 +362,6 @@ undo_piece_state
 	st	prev_piece_x,	piece_x
 	st	prev_piece_y,	piece_y
 undo_piece_state_ret	jmp	0
-
-; Choose the next piece kind.
-; TODO: Actual random generator. Currently only cycles through pieces.
-next_piece
-	inc	piece_kind
-	andto	#0x07,	piece_kind
-next_piece_ret	jmp	0
 
 ; Prepare piece stage subroutine
 ; piece_kind = which piece to render. {0,1,2,3,4,5,6}
@@ -427,9 +430,8 @@ prep_piece_ret	jmp	0
 ;
 ; Shifts the piece stage downwards by the set amount stored negated in tmp.
 ; If the piece is shifted to the bottom of the board, stops and returns non-zero in tmp.
-;
-; Fixed method: 16 instructions total
 shift_piece
+	jeq	tmp,	shift_piece_ret
 shift_piece_loop
 	jo	piece_stage+6,	shift_piece_ret
 	jo	piece_stage+4,	shift_piece_ret
@@ -444,49 +446,10 @@ shift_piece_loop
 	ror	piece_stage+2
 	lsr	piece_stage+1
 	ror	piece_stage+0
-	
 	incjne	tmp,	shift_piece_loop
-shift_piece_ret	jmp	0		; Return from subroutine
+shift_piece_ret	jmp	0	; Return from subroutine
 
-; Indirect method: 16 instructions total
-;shift_piece
-;	st	#(piece_stage+6),	shift_piece_ptr_1
-;shift_piece_loop
-;	insn INCTO_INSN	shift_piece_ptr_1,	shift_piece_ptr_0
-
-;shift_piece_val_1	insn CLRA_INSN	shift_piece_val_1,	0	; Self clearing variable shift_piece_val_1
-;shift_piece_ptr_1	add	shift_piece_val_1,	0	; LOAD
-;	jo	shift_piece_val_1,	shift_piece_collide
-
-;shift_piece_val_0	insn CLRA_INSN	shift_piece_val_0,	0	; Self clearing variable shift_piece_val_0
-;shift_piece_ptr_0	add	shift_piece_val_0,	0	; LOAD
-;	st	shift_piece_ptr_0,	shift_piece_wb_ptr_0
-;	st	shift_piece_ptr_1,	shift_piece_wb_ptr_1
-;shift_piece_wb_ptr_0	lsrto	shift_piece_val_0,	0	; ROR STORE
-;shift_piece_wb_ptr_1	rorto	shift_piece_val_1,	0	; ROR STORE
-;	rsbto	#2,	shift_piece_ptr_1
-;	incjne	tmp,	shift_piece_loop
-;	jmp	shift_piece_ret
-;shift_piece_collide	st	#1,	tmp
-;shift_piece_ret	jmp	0		; Return from subroutine
-
-; shift_piece_up: Shift the piece stage up one unit.
-;
-; Note: Only use this if we have instruction space.
-; The alternative is to re-render the entire piece stage if there is a collision, but it's much slower.
-;
-; shift_piece_up
-; 	lsl	piece_stage+0
-; 	rol	piece_stage+1
-; 	lsl	piece_stage+2
-; 	rol	piece_stage+3
-; 	lsl	piece_stage+4
-; 	rol	piece_stage+5
-; 	lsl	piece_stage+6
-; 	rol	piece_stage+7
-; shift_piece_up_ret	jmp	0
-
-; Stamp piece board subroutine.
+; stamp_piece: Stamp piece board subroutine.
 ;
 ; This subroutine handles several functions:
 ;
@@ -499,7 +462,6 @@ shift_piece_ret	jmp	0		; Return from subroutine
 ; When executing stamp_piece_coll_op, tmp will be non-zero if a collision occured.
 ;
 stamp_piece
-	
 	; Prep pointers
 	st	#piece_stage,	stamp_piece_ps_ptr
 	st	#gameboard,	stamp_piece_gb_ptr
@@ -541,7 +503,7 @@ stamp_piece_loop_end
 	incjne	tmp,	stamp_piece_loop
 stamp_piece_ret	jmp	0	; Return from subroutine
 
-; Render board subroutine
+; render_board: Render board subroutine
 ;
 ; How:
 ; Render the gameboard from left to right, top to bottom, to give the most simple console output (avoids ANSI console cursor movement).
@@ -550,7 +512,7 @@ stamp_piece_ret	jmp	0	; Return from subroutine
 ; LOOP B: Work down the rows using a single byte bitmask, shifting it right each iteration.
 ; LOOP C: Work along the columns from 0 to 10, incrementing the gameboard ptr by 2 each iteration.
 ;         Decide whether to render a block or empty character by ANDing the gameboard ptr value with the current bitmask
-
+;
 render_board
 	st	#(GAMEBOARD_STRIDE-1),	render_board_ptr	; Start the render_board_ptr with an offset of 1 to render the top half of the board.
 ; LOOP A
@@ -589,19 +551,19 @@ render_board_col	outc	#LF_CHAR		; render_board_col: The current column iteration
 	rsbto	#(gameboard+1),	render_board_ptr	; TODO: Can replace with ALEB_TOC_INSN + jcs
 	; If the render_board_ptr is now < 0, we have just rendered the lowest 8 rows of the board and are done.
 	jge	render_board_ptr,	render_board_loop_a	; Otherwise continue LOOP A.
+	
+get_full_lines_mask	outc	#CR_CHAR		; get_full_lines_mask: variable for get_full_lines
+	outc	#LF_CHAR
 ; END LOOP A
 render_board_ret	jmp	0		; Return from subroutine.
 
-; line_clr
-;
-; Clears all full rows from the gameboard.
+; line_clr: Clears all full rows from the gameboard.
 ;
 ; How:
 ; 1. Call get_full_lines to generate a bitmask of all the complete rows
 ; 2. Call rem_bits on each column in the gameboard with a copy of the complete rows bitmask.
 ; 3. Copy the result back over the gameboard.
 ;
-;line_clr_i	skip	1	; We cannot use tmp as loop counter since we call subroutines which overwrite tmp.
 line_clr
 	; Generate the line clear mask. Result in get_full_lines_mask.
 	jsr	get_full_lines_ret,	get_full_lines
@@ -658,7 +620,7 @@ line_clr_ret	jmp	0		; Return from subroutine
 ; Generates a 2 byte, 16 bit bitmask indicating which rows in the gameboard are filled.
 ; This is the bitwise AND of all columns in the gameboard.
 ;
-get_full_lines_mask	skip	2
+;get_full_lines_mask	skip	2	; This is stored elsewhere, hidden in some other instructions.
 get_full_lines
 	st	#(-GAMEBOARD_COLS),	tmp
 	st	#0xFF,	get_full_lines_mask+0
@@ -709,10 +671,11 @@ rem_bits_ret	jmp	0		; Return from subroutine
 
 ; Game state
 ;
+
 ; reset_game_state: Resets all game variables and the game board.
 reset_game_state
 
-lines_cleared	insn CLRA_INSN	lines_cleared,	0
+;lines_cleared	insn CLRA_INSN	lines_cleared,	0
 piece_kind	insn CLRA_INSN	piece_kind,	0
 piece_rotation	insn CLRA_INSN	piece_rotation,	0
 piece_y	insn CLRA_INSN	piece_y,	0
@@ -756,6 +719,7 @@ prev_piece_x	insn CLRA_INSN	prev_piece_x,	0
 
 	insn 0x00000000	,	0xFF		; A wall for the gameboard to provide collisions at -1
 	insn 0x00000000	,	0xFF
+
 gameboard
 	insn CLRA_INSN	gameboard+0,	0
 	insn CLRA_INSN	gameboard+1,	0
@@ -780,7 +744,6 @@ gameboard
 	insn 0x00000000	,	0xFF	; no-op/clc, but specified as custom instruction se we can set B value.
 	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at 11
 reset_game_state_ret	jmp	0
-	
 
 ; Piece stage
 ;
