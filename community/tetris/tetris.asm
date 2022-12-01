@@ -78,6 +78,7 @@ Z_CHAR	equ	A_CHAR+25
 IMADD_INSN	equ	0xC0800000	; aa + [bb] --> [aa]. Immediate version of ADD. If aa is 0, allows single instruction LOAD of [bb] to [0].
 AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs [aa] and [bb], and stores in [aa].
 CLRA_INSN	equ	0x81000000	; Stores 0 --> [aa]. Implemented as [aa] & 0 --> [aa].
+INCA_INSN	equ	0x80200000	; Stores [aa] + 1 --> [aa] in one instruction.
 INCTO_INSN	equ	0x08200000	; Stores [aa] + 1 --> [bb] in one instruction.
 ALTB_TOC_INSN	equ	0x00C00000	; Stores [aa] < [bb] --> Carry.
 ALEB_TOC_INSN	equ	0x00E00000	; Stores [aa] <= [bb] --> Carry.
@@ -499,8 +500,8 @@ stamp_piece_writeback
 stamp_piece_gb_wb_ptr	st	stamp_piece_gb_val,	0
 stamp_piece_loop_end	
 	; Increment pointers
-	inc	stamp_piece_ps_ptr	; TODO: Replace with an inca -> a instruction (TODO: Available variable storage)
-	inc	stamp_piece_gb_ptr
+rem_bits_mask	insn INCA_INSN	stamp_piece_ps_ptr,	0	; Variable storage for rem_bits_mask, in rem_bits
+	insn INCA_INSN	stamp_piece_gb_ptr,	0
 	incjne	tmp,	stamp_piece_loop
 stamp_piece_ret	jmp	0	; Return from subroutine
 
@@ -532,7 +533,7 @@ render_board_ptr	insn AND_INSN	tmp,	0	; Indirect AND, store result in tmp
 	jne	tmp,	render_board_print_a
 	insn OUTC_JMP_INSN	#EMPTY_CHAR,	render_board_print_b	; Print empty char and jump over the block char print
 render_board_print_a
-	outc	#BLOCK_CHAR		; TODO: Available variable storage
+line_clr_i	outc	#BLOCK_CHAR		; Used as variable storage for line_clr_i in line_clr
 render_board_print_b
 	addto	#GAMEBOARD_STRIDE,	render_board_ptr	; Move onto next column byte
 	incjne	render_board_col,	render_board_loop_c	; If we still have columns to render, continue LOOP C
@@ -579,8 +580,8 @@ line_clr
 
 line_clr_do_remove
 	; Prep work. Ensure rem_bits_value is zeroed.
-line_clr_i	insn CLRA_INSN	rem_bits_value+0,	0	; Used as variable storage for line_clr_i
-	insn CLRA_INSN	rem_bits_value+1,	0	; TODO: Available variable storage
+rem_bits_value	insn CLRA_INSN	rem_bits_value+0,	0	; rem_bits_value: 2 bytes. Variable storage for rem_bits.
+	insn CLRA_INSN	rem_bits_value+1,	0	; Self clearing.
 
 	; Iterate over each column and call the rem_bits subroutine to remove the bits from the column.
 	st	#(-GAMEBOARD_COLS),	line_clr_i	; Prep the loop counter
@@ -645,8 +646,8 @@ get_full_lines_ret	jmp	0		; Return from subroutine
 ; The output is placed in rem_bits_result.
 ; rem_bits_mask and rem_bits_value are zeroed as a result of this process.
 ;
-rem_bits_mask	skip	2
-rem_bits_value	skip	2
+;rem_bits_mask	skip	2	; Stored in stamp_piece
+;rem_bits_value	skip	2	; Stored in line_clr
 rem_bits
 	; Pre-clear the result	
 rem_bits_result	insn CLRA_INSN	rem_bits_result+0,	0	; Self clearing variables
