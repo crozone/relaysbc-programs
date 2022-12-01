@@ -5,11 +5,11 @@
 ;
 ; Controls:
 ;
-; Relay computer numpad is used to control game.
+; Relay computer numpad is used to control the game.
 ;
+; 2: Move piece down
 ; 4: Move piece left
 ; 6: Move piece right
-; 2: Move piece down
 ; 7: Rotate piece left
 ; 9: Rotate piece right
 ;
@@ -19,6 +19,7 @@
 ;
 ; * Game over (Current code infinite loops on game over)
 ; * Scorekeeping
+; * Further optimise code to free up some instruction space to implement above TODOs.
 ;
 
 ; =========
@@ -223,9 +224,11 @@ main
 	jsr	reset_game_state_ret,	reset_game_state
 main_next_piece
 	; Choose the next piece kind.
-	; TODO: Actual random generator. Currently only cycles through pieces.
-	inc	piece_kind
-	andto	#0x07,	piece_kind
+	; TODO: Actual random generator. Currently only cycles through pieces incrementally.
+	; Increment from 0 -> 6, then wrap.
+	insn ALEB_TOC_INSN	#6,	piece_kind	; Set carry if piece_kind >= 6.
+	adcto	#1,	piece_kind	; If carry set, increment by 2, otherwise increment by 1.
+	andto	#0x07,	piece_kind	; Clear all bits above first three so that value wraps.
 	
 	; Set location and rotation
 	st	#3,	prev_piece_x
@@ -247,12 +250,11 @@ main_render_fresh_piece
 	; Since the player isn't attempting to drop the piece, and we're re-rendering the state,
 	; we don't actually care if there was a floor collision.
 	; We only care if there's a gameboard collision.
-	
+main_check_collision
 	; Check if there is going to be a collision
 	st	#stamp_piece_coll_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
 	jne	tmp,	main_undo_then_render	; We have a collision. Undo changes and re-render.
-main_no_collision
 main_full_render
 	; Stamp to board
 	st	#stamp_piece_merge_op,	stamp_piece_op
@@ -280,12 +282,7 @@ main_full_render_clr
 	; Read input
 	; ----------
 main_read_input
-	;inwait	tmp
-	st	#2,	tmp		; TEST
-	; Input is from relay computer keypad, and will be 0-F (0-15).
-	; Zero high bits to allow some compatibility with keyboard input, Eg, a-o = 1-F
-	andto	#0x0F,	tmp
-	
+	inwait	tmp
 	; TODO: One posibility to save instructions:
 	; Use a jump table here. Fill the gaps with variables like:
 	; * get_full_lines_mask	skip	2
@@ -342,10 +339,10 @@ main_move_drop_2
 	jmp	main_undo_then_render
 main_move_left
 	dec	piece_x
-	jmp	main_full_render
+	jmp	main_check_collision
 main_move_right
 	inc	piece_x
-	jmp	main_full_render
+	jmp	main_check_collision
 main_rot_left
 	dec	piece_rotation
 	jmp	main_render_fresh_piece
