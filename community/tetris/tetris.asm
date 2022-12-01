@@ -284,13 +284,6 @@ main_full_render_clr
 	; ----------
 main_read_input
 	inwait	tmp
-	; TODO: One posibility to save instructions:
-	; Use a jump table here. Fill the gaps with variables like:
-	; * get_full_lines_mask	skip	2
-	; * rem_bits_mask	skip	2
-	; * rem_bits_value	skip	2
-	;
-	; Downside is that any invalid input would crash the game.
 	
 	; --------------
 	; Input 2 = Drop
@@ -623,7 +616,7 @@ line_clr_ret	jmp	0		; Return from subroutine
 ; Generates a 2 byte, 16 bit bitmask indicating which rows in the gameboard are filled.
 ; This is the bitwise AND of all columns in the gameboard.
 ;
-;get_full_lines_mask	skip	2	; This is stored elsewhere, hidden in some other instructions.
+;get_full_lines_mask	skip	2	; Stored in render_board
 get_full_lines
 	st	#(-GAMEBOARD_COLS),	tmp
 	st	#0xFF,	get_full_lines_mask+0
@@ -661,6 +654,9 @@ rem_bits_loop
 	; If Carry Set
 	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
 	rol	rem_bits_value+1		; The carry result is discarded.
+	
+	; TODO: Maybe count lines cleared here? However it should only happen once, and this function is called 4 times.
+	
 	jmp	rem_bits_loop_end
 rem_bits_A	; If Carry Clear
 	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
