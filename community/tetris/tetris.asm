@@ -291,15 +291,17 @@ main_move_drop
 	
 	; Check collision with floor
 	jeq	tmp,	main_move_drop_2
-	st	#1,	stamp_flag
-	jmp	main_full_render
+	; We had a floor collision.
+	st	#1,	stamp_flag	; Set the stamp flag. The piece will be stamped during main_full_render.
+	jmp	main_full_render		; Re-render board and restart game loop.
 main_move_drop_2
 	; Check collision with gameboard
 	st	#stamp_piece_coll_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
-	jeq	tmp,	main_full_render
-	st	#1,	stamp_flag
-	jmp	main_undo_then_render
+	jeq	tmp,	main_full_render	; No collision, re-render board.
+	; We had a gameboard collision downwards.
+	st	#1,	stamp_flag	; Set the stamp flag. The piece will be stamped during main_full_render.
+	jmp	main_undo_then_render		; Undo piece movement to move piece back up one, then re-render board and restart game loop.
 main_move_left
 	dec	piece_x
 	jmp	main_check_collision
@@ -643,14 +645,14 @@ rem_bits_ret	jmp	0		; Return from subroutine
 ; reset_game_state: Resets all game variables and the game board.
 reset_game_state
 
-;lines_cleared	insn CLRA_INSN	lines_cleared,	0
+lines_cleared	insn CLRA_INSN	lines_cleared,	0
 piece_kind	insn CLRA_INSN	piece_kind,	0
 piece_rotation	insn CLRA_INSN	piece_rotation,	0
-piece_y	insn CLRA_INSN	piece_y,	0
 piece_x	insn CLRA_INSN	piece_x,	0
+piece_y	insn CLRA_INSN	piece_y,	0
 prev_piece_rotation	insn CLRA_INSN	prev_piece_rotation,	0
-prev_piece_y	insn CLRA_INSN	prev_piece_y,	0
 prev_piece_x	insn CLRA_INSN	prev_piece_x,	0
+prev_piece_y	insn CLRA_INSN	prev_piece_y,	0
 
 ; Game board
 ;
@@ -685,7 +687,7 @@ prev_piece_x	insn CLRA_INSN	prev_piece_x,	0
 ; Neat trick: Since every instruction of the gameboard would normally be a HALT instruction and mostly wasted,
 ; we can actually use the instruction to clear it's own B value. This gives us gameboard clearing and piece stage clearing "for free".
 
-	insn 0x00000000	,	0xFF		; A wall for the gameboard to provide collisions at -1
+	insn 0x00000000	,	0xFF		; A wall for the gameboard to provide collisions at column -1
 	insn 0x00000000	,	0xFF
 
 gameboard
@@ -710,7 +712,7 @@ gameboard
 	insn CLRA_INSN	gameboard+18,	0
 	insn CLRA_INSN	gameboard+19,	0
 	insn 0x00000000	,	0xFF	; no-op/clc, but specified as custom instruction se we can set B value.
-	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at 11
+	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at column 11
 reset_game_state_ret	jmp	0
 
 ; Piece stage
@@ -744,7 +746,7 @@ piece_stage	;skip	PIECE_STAGE_SIZE
 	insn CLRA_INSN	piece_stage+5,	0
 	insn CLRA_INSN	piece_stage+6,	0
 	insn CLRA_INSN	piece_stage+7,	0
+END_OF_PROGRAM	; Placeholder label to easily see how big the program is from the symbol table.
 clear_piece_stage_ret	jmp	0
 
-; Placeholder label to easily see how big the program is from the symbol table
-END_OF_PROGRAM
+
