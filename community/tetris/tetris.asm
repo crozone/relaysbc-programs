@@ -18,7 +18,6 @@
 ; TODO:
 ;
 ; * Game over (Current code infinite loops on game over)
-; * Scorekeeping
 ; * Further optimise code to free up some instruction space to implement above TODOs.
 ;
 
@@ -626,7 +625,9 @@ rem_bits_loop
 	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
 	rol	rem_bits_value+1		; The carry result is discarded.
 	
-	; TODO: Maybe count lines cleared here? However it should only happen once, and this function is called 4 times.
+	; Count cleared lines, but only on first iteration (to avoid 10x points)
+	insn ALEB_TOC_INSN	#(-GAMEBOARD_COLS),	line_clr_i	; If this is the first iteration of rem_bits (first column), store 1 in carry
+	adcto	#0,	lines_cleared	; Add carry to lines cleared
 	
 	jmp	rem_bits_loop_end
 rem_bits_A	; If Carry Clear
