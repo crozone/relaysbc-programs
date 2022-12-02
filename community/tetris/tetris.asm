@@ -42,37 +42,6 @@ BAR_CHAR	equ	0x7C	; |
 CR_CHAR	equ	0x0D	; Carriage Return CR \r
 LF_CHAR	equ	0x0A	; Linefeed LF \n
 
-; Number constants
-ZERO_CHAR	equ	0x30	; 0
-
-; Alphabet constants
-A_CHAR	equ	0x41	; A
-B_CHAR	equ	A_CHAR+1
-C_CHAR	equ	A_CHAR+2
-D_CHAR	equ	A_CHAR+3
-E_CHAR	equ	A_CHAR+4
-F_CHAR	equ	A_CHAR+5
-G_CHAR	equ	A_CHAR+6
-H_CHAR	equ	A_CHAR+7
-I_CHAR	equ	A_CHAR+8
-J_CHAR	equ	A_CHAR+9
-K_CHAR	equ	A_CHAR+10
-L_CHAR	equ	A_CHAR+11
-M_CHAR	equ	A_CHAR+12
-N_CHAR	equ	A_CHAR+13
-O_CHAR	equ	A_CHAR+14
-P_CHAR	equ	A_CHAR+15
-Q_CHAR	equ	A_CHAR+16
-R_CHAR	equ	A_CHAR+17
-S_CHAR	equ	A_CHAR+18
-T_CHAR	equ	A_CHAR+19
-U_CHAR	equ	A_CHAR+20
-V_CHAR	equ	A_CHAR+21
-W_CHAR	equ	A_CHAR+22
-X_CHAR	equ	A_CHAR+23
-Y_CHAR	equ	A_CHAR+24
-Z_CHAR	equ	A_CHAR+25
-
 ; Additional custom instructions
 ; To use these, call them like: insn INCTO_INSN aa, bb
 IMADD_INSN	equ	0xC0800000	; aa + [bb] --> [aa]. Immediate version of ADD. If aa is 0, allows single instruction LOAD of [bb] to [0].
