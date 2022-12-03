@@ -29,7 +29,12 @@ unsigned char pc;
 int carry_flag;
 
 int outc_count;
-unsigned char outc_buf[1024];
+
+#define OUTCBUF_SIZE 65536
+unsigned char outc_buf[OUTCBUF_SIZE];
+
+#define INWAITBUF_SIZE 256
+char inwait_buf[INWAITBUF_SIZE];
 
 #define CC_N 0x00010000
 #define CC_Z 0x00020000
@@ -47,6 +52,27 @@ unsigned char outc_buf[1024];
 #define IN 0x20000000
 #define IMM 0x40000000
 #define WRA 0x80000000
+
+
+void outc_write(unsigned char out_val) {
+    if(outc_count < OUTCBUF_SIZE) {
+        outc_buf[outc_count] = out_val;
+        outc_count++;
+    }
+}
+
+void outc_print() {
+    // Write console output (outc)
+	if(outc_count > 0) {
+		printf("\nConsole output (len %d):\n", outc_count);
+        int i;
+		for(i = 0; i < outc_count; i++) {
+			putchar(outc_buf[i]);
+		}
+		printf("\n");
+        outc_count = 0;
+	}
+}
 
 void unasm(unsigned int opcode)
 {
@@ -174,15 +200,11 @@ int step()
 
 	arga = arga_raw;
 
-	// Check for input
-	if ((WRA & insn) && (WRB & insn) && (IN & insn)) {
-		char buf[256];
-		long val;
-		printf("Input: ");
-		fgets(buf, 255, stdin);
-		val = strtol(buf, NULL, 0);
-		arga = (arga & 0xF0) | (val & 0x0F);
-	}
+    if(IN & insn) {
+        long val = 0;
+        // Standard IN read. No input is emulated so set to 0.
+        arga = (arga & 0xF0) | (val & 0x0F);
+    }
 
 	// Argument B enable
 	if (!(BEN & insn))
@@ -248,13 +270,24 @@ int step()
 		pc = pc + 1;
 	}
 
+    // Check for input from console
+    if ((WRB & insn) && (WRA & insn) && (IN & insn)) {
+        long val;
+        // Write out the contents of output buffer for interactive programs
+        outc_print();
+        printf("Input: ");
+        fgets(inwait_buf, INWAITBUF_SIZE - 1, stdin);
+        val = strtol(inwait_buf, NULL, 0);
+        
+        // Based on current pic implementation, entire write data is replaced with character.
+        write_data = val & 0xFF;
+    }
 	// Output
-	if (insn & OUT) {
+	else if (insn & OUT) {
 		unsigned char out_val = (ror_result & 0xFF);
 		if((insn & WRA) && (insn & WRB)) {
 			printf(" OUTC=%X", out_val);
-			outc_buf[outc_count] = out_val;
-			outc_count++;
+			outc_write(out_val);
 		} else {
 			printf(" OUT=%X", out_val);
 		}
@@ -291,6 +324,7 @@ int main(int argc, char *argv[])
 	char *file_name = 0;
 	char buf[1024];
 	int total_insn = 0;
+    int file_is_stdin = 0;
 
 	pc = 0;
 	carry_flag = 0;
@@ -331,10 +365,12 @@ int main(int argc, char *argv[])
 	if (!file_name || !strcmp(file_name, "-")) {
 		/* Read from stdin if filename omitted or "-" */
 		f = stdin;
+        file_is_stdin = 1;
 	}
 	else {
 		/* Read from file */
 		f = fopen(file_name, "r");
+        file_is_stdin = 0;
 		if (!f) {
 			fprintf(stderr, "couldn't open %s\n", file_name);
 			return -1;
@@ -359,7 +395,11 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
-	fclose(f);
+    
+    // Leave stdin open for further inwait reads
+    if(!file_is_stdin) {
+        fclose(f);
+    }
 
 	printf("Starting at %2.2x\n", pc);
 	while (!step()) total_insn++;
@@ -378,16 +418,9 @@ int main(int argc, char *argv[])
 		}
 		printf("\n");
 	}
-
-	// Write console output (outc)
-	if(outc_count > 0) {
-		printf("Console output (len %d):\n", outc_count);
-		for(x = 0; x < outc_count; x++) {
-			unsigned char outc_val = outc_buf[x];
-			putchar(outc_val);
-		}
-		printf("\n");
-	}
+    
+    // Print final console output from application
+    outc_print();
 
 	return 0;
 }
