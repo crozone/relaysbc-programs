@@ -39,9 +39,9 @@ f0: 8100f000 8100f100 000000ff 000000ff 4018ff00 8100f500 8100f600 8100f700
 f8: 8100f800 8100f900 8100fa00 8100fb00 8100fc00 4018ff00
 ```
 
-## Compiling the game
+## Assembling the game
 
-To compile the game, run `asm tetris.asm > tetris.lst`.
+To assemble the game, run `asm tetris.asm > tetris.lst`.
 
 This requires the most current version of the assembler from the repo in order to support custom instructions with arguments. It will not compile correctly with Joe's original version of the asm executable.
 
@@ -52,6 +52,14 @@ A pre-built tetris.lst is already included in the repo for convenience.
 Write the compiled memory map into the relay computer.
 
 **Run from address 0x01.**
+
+The game renders the output to the serial console.
+
+### Simulator
+
+Run in the simulator with `sim -pc 1 tetris.lst`
+
+The most current version of the simulator from the repo is recommended, since it has been modified to support interactive text programs (`outc`/`inwait`) better. The game will technically run on Joe's original simulator version, but it will not render the text output making it basically unplayable.
 
 ### Controls
 
@@ -64,12 +72,6 @@ In the simulator, the keys 0-9, a-f can be used.
 * 6: Move piece right
 * 7: Rotate piece left
 * 9: Rotate piece right
-
-### Simulator
-
-Run in the simulator with `sim -pc 1 tetris.lst`
-
-The most current version of the simulator from the repo is recommended, since it has been modified to support interactive text programs (`outc`/`inwait`) better. The game will technically run on Joe's original simulator version, but it will not render the text output making it basically unplayable.
 
 ## Demo
 
