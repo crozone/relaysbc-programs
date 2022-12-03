@@ -229,17 +229,17 @@ main_full_render
 	st	#stamp_piece_merge_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
 	
-	; Print game board to console
-	jsr	render_board_ret,	render_board
-	
 	; If stamp flag set, do not clear piece. Instead, jump to main_next_piece.
-	jeq	stamp_flag,	main_full_render_clr
+	jeq	stamp_flag,	main_no_stamp_flag
 	; Check line clear
 	jsr	line_clr_ret,	line_clr
 	; Clear stamp flag
 stamp_flag	insn CLRA_INSN	stamp_flag,	0
 	jmp	main_next_piece
-main_full_render_clr	
+main_no_stamp_flag
+	; Print game board to console
+	jsr	render_board_ret,	render_board
+main_full_render_clr
 	; Clear piece from board
 	st	#stamp_piece_clear_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece

@@ -209,11 +209,11 @@
 ; 226     0f 006a_0008    	jne	tmp,	main_undo_then_render	; We have a collision. Undo changes and re-render.
 ; 229     10 4800_8782    	st	#stamp_piece_merge_op,	stamp_piece_op
 ; 230     11 8408_8f79    	jsr	stamp_piece_ret,	stamp_piece
-; 233     12 8408_a390    	jsr	render_board_ret,	render_board
-; 236     13 0062_1517    	jeq	stamp_flag,	main_full_render_clr
-; 238     14 8408_b8a4    	jsr	line_clr_ret,	line_clr
-; 240     15 8100_1500    stamp_flag	insn CLRA_INSN	stamp_flag,	0
-; 241     16 4018_ff02    	jmp	main_next_piece
+; 233     12 0062_1416    	jeq	stamp_flag,	main_no_stamp_flag
+; 235     13 8408_b8a4    	jsr	line_clr_ret,	line_clr
+; 237     14 8100_1400    stamp_flag	insn CLRA_INSN	stamp_flag,	0
+; 238     15 4018_ff02    	jmp	main_next_piece
+; 241     16 8408_a390    	jsr	render_board_ret,	render_board
 ; 244     17 4800_8982    	st	#stamp_piece_clear_op,	stamp_piece_op
 ; 245     18 8408_8f79    	jsr	stamp_piece_ret,	stamp_piece
 ; 248     19 8408_3d3a    	jsr	save_piece_state_ret,	save_piece_state
@@ -236,12 +236,12 @@
 ; 288     28 0880_00d8    	addto	tmp,	piece_y
 ; 289     29 8408_786a    	jsr	shift_piece_ret,	shift_piece
 ; 292     2a 0062_002d    	jeq	tmp,	main_move_drop_2
-; 294     2b 4800_0115    	st	#1,	stamp_flag	; Set the stamp flag. The piece will be stamped during main_full_render.
+; 294     2b 4800_0114    	st	#1,	stamp_flag	; Set the stamp flag. The piece will be stamped during main_full_render.
 ; 295     2c 4018_ff10    	jmp	main_full_render		; Re-render board and restart game loop.
 ; 298     2d 4800_8382    	st	#stamp_piece_coll_op,	stamp_piece_op
 ; 299     2e 8408_8f79    	jsr	stamp_piece_ret,	stamp_piece
 ; 300     2f 0062_0010    	jeq	tmp,	main_full_render	; No collision, re-render board.
-; 302     30 4800_0115    	st	#1,	stamp_flag	; Set the stamp flag. The piece will be stamped during main_full_render.
+; 302     30 4800_0114    	st	#1,	stamp_flag	; Set the stamp flag. The piece will be stamped during main_full_render.
 ; 303     31 4018_ff08    	jmp	main_undo_then_render		; Undo piece movement to move piece back up one, then re-render board and restart game loop.
 ; 305     32 48e0_01d7    	dec	piece_x
 ; 306     33 4018_ff0d    	jmp	main_check_collision
@@ -669,6 +669,7 @@
 ; main_move_left = 0x32
 ; main_move_right = 0x34
 ; main_next_piece = 0x2
+; main_no_stamp_flag = 0x16
 ; main_read_input = 0x1a
 ; main_render_fresh_piece = 0x9
 ; main_rot_left = 0x36
@@ -720,7 +721,7 @@
 ; shift_piece = 0x6a
 ; shift_piece_loop = 0x6b
 ; shift_piece_ret = 0x78
-; stamp_flag = 0x15
+; stamp_flag = 0x14
 ; stamp_piece = 0x79
 ; stamp_piece_clear_op = 0x89
 ; stamp_piece_coll_op = 0x83
@@ -743,11 +744,11 @@
 ; Memory image:
 00: c810ff00 8408f4d4 40e006d5 489001d5 498007d5 480003da 480000db 480000d9
 08: 8408413e 8408fdf5 84086942 0800d800 8408786a 48008382 84088f79 006a0008
-10: 48008782 84088f79 8408a390 00621517 8408b8a4 81001500 4018ff02 48008982
+10: 48008782 84088f79 00621416 8408b8a4 81001400 4018ff02 8408a390 48008982
 18: 84088f79 84083d3a e8000000 48e00200 00620027 48e00200 00620032 48e00200
 20: 00620034 48e00100 00620036 48e00200 00620038 d8003f00 4018ff1a 4800ff00
-28: 088000d8 8408786a 0062002d 48000115 4018ff10 48008382 84088f79 00620010
-30: 48000115 4018ff08 48e001d7 4018ff0d 488001d7 4018ff0d 48e001d6 4018ff09
+28: 088000d8 8408786a 0062002d 48000114 4018ff10 48008382 84088f79 00620010
+30: 48000114 4018ff08 48e001d7 4018ff0d 488001d7 4018ff0d 48e001d6 4018ff09
 38: 488001d6 4018ff09 0800d6d9 0800d7da 0800d8db 4018ff00 0800d9d6 0800dad7
 40: 0800dbd8 4018ff00 0800d547 0a00d600 0a000000 08904747 48804847 4018ff00
 48: 48086656 48086656 4808f056 4808f056 48082756 48087256 48083656 48083656
