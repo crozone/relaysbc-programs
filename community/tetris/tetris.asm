@@ -53,7 +53,7 @@ ALEB_TOC_INSN	equ	0x00E00000	; Stores [aa] <= [bb] --> Carry.
 ST_JMP_INSN	equ	0x08080000	; Stores [aa] --> [bb] and jumps to bb.
 OUTC_JMP_INSN	equ	0x98080000	; Writes [aa] to the console and jumps to bb. WRA and WRB are set to make OUT write to console.
 LSR_JCC_INSN	equ	0x820A0000	; Rotates [aa] right, writes the result back to [aa], and jumps if the shifted out bit (carry output) was clear.
-INCJMP_INSN	equ	0x80240000	; Stores [aa] + 1 --> [aa] and unconditionally jumps to bb
+INCJMP_INSN	equ	0x80280000	; Stores [aa] + 1 --> [aa] and unconditionally jumps to bb
 
 ; Pieces templates
 ;
@@ -279,40 +279,41 @@ main_read_input
 	rsbto	#02,	tmp
 	jeq	tmp,	main_rot_right
 
-	; Unknown input, go back to reading
-	outc	#0x3F	; Print '?'	TODO: Available variable storage
-	jmp	main_read_input
+	; Unknown input, read user input again.
+	insn OUTC_JMP_INSN	#0x3F,	main_read_input	; Print '?'
 main_move_drop
 	; Move piece y down, and also shift piece stage down
+	dec	piece_y
 	st	#-1,	tmp
-	addto	tmp,	piece_y
 	jsr	shift_piece_ret,	shift_piece
 	
 	; Check collision with floor
 	jeq	tmp,	main_move_drop_2
 	; We had a floor collision.
-	st	#1,	stamp_flag	; Set the stamp flag. The piece will be stamped during main_full_render.
-	jmp	main_full_render		; Re-render board and restart game loop.
+	; Set the stamp flag. The piece will be stamped during main_full_render.
+	insn INCJMP_INSN	stamp_flag,	main_full_render	; Re-render board and restart game loop.
 main_move_drop_2
 	; Check collision with gameboard
 	st	#stamp_piece_coll_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
 	jeq	tmp,	main_full_render	; No collision, re-render board.
 	; We had a gameboard collision downwards.
-	st	#1,	stamp_flag	; Set the stamp flag. The piece will be stamped during main_full_render.
-	jmp	main_undo_then_render		; Undo piece movement to move piece back up one, then re-render board and restart game loop.
+	; Set the stamp flag. The piece will be stamped during main_full_render.
+	insn INCJMP_INSN	stamp_flag,	main_undo_then_render	; Undo piece movement to move piece back up one, then re-render board and restart game loop.
 main_move_left
 	dec	piece_x
 	jmp	main_check_collision
 main_move_right
-	inc	piece_x
-	jmp	main_check_collision
+	;inc	piece_x
+	;jmp	main_check_collision
+	insn INCJMP_INSN	piece_x,	main_check_collision
 main_rot_left
 	dec	piece_rotation
 	jmp	main_render_fresh_piece
 main_rot_right
-	inc	piece_rotation
-	jmp	main_render_fresh_piece
+	;inc	piece_rotation
+	;jmp	main_render_fresh_piece
+	insn INCJMP_INSN	piece_rotation,	main_render_fresh_piece
 main_end
 
 save_piece_state
@@ -460,7 +461,7 @@ stamp_piece_clear_op
 	bicto	stamp_piece_ps_val,	stamp_piece_gb_val
 stamp_piece_writeback
 	st	stamp_piece_gb_ptr,	stamp_piece_gb_wb_ptr
-stamp_piece_gb_wb_ptr	st	stamp_piece_gb_val,	0
+stamp_piece_gb_wb_ptr	st	stamp_piece_gb_val,	0	; Game board STORE
 stamp_piece_loop_end	
 	; Increment pointers
 rem_bits_mask	insn INCA_INSN	stamp_piece_ps_ptr,	0	; Variable storage for rem_bits_mask, in rem_bits
@@ -538,9 +539,6 @@ line_clr
 	jne	get_full_lines_mask+0,	line_clr_do_remove
 	jne	get_full_lines_mask+1,	line_clr_do_remove
 	jmp	line_clr_ret	; Fastpath to returning from the subroutine
-
-	; TODO: Count and save the number of bits in get_full_lines_mask for scoring
-
 line_clr_do_remove
 	; Prep work. Ensure rem_bits_value is zeroed.
 rem_bits_value	insn CLRA_INSN	rem_bits_value+0,	0	; rem_bits_value: 2 bytes. Variable storage for rem_bits.
@@ -747,7 +745,5 @@ piece_stage	;skip	PIECE_STAGE_SIZE
 	insn CLRA_INSN	piece_stage+5,	0
 	insn CLRA_INSN	piece_stage+6,	0
 	insn CLRA_INSN	piece_stage+7,	0
-END_OF_PROGRAM	; Placeholder label to easily see how big the program is from the symbol table.
 clear_piece_stage_ret	jmp	0
-
-
+PROGRAM_SIZE	; Placeholder label to easily see how big the program is from the symbol table.
