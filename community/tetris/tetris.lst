@@ -528,7 +528,7 @@
 ; 739     ef 0064_00f5    	jcc	rem_bits_A		; GOTO A if carry clear
 ; 741     f0 0880_cfcf    	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
 ; 742     f1 0890_d0d0    	rol	rem_bits_value+1		; The carry result is discarded.
-; 745     f2 40e0_f6bf    	insn ALEB_TOC_INSN	#(-GAMEBOARD_COLS),	line_clr_i	; If this is the first iteration of rem_bits (first column), store 1 in carry
+; 745     f2 40e0_ffbf    	insn ALEB_TOC_INSN	#-1,	line_clr_i	; If this is the last iteration of rem_bits (last column), store 1 in carry
 ; 746     f3 4890_0001    	adcto	#0,	lines_cleared	; Add carry to lines cleared
 ; 748     f4 4018_fff9    	jmp	rem_bits_loop_end
 ; 750     f5 0880_cfcf    	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
@@ -715,5 +715,5 @@ d0: 8100d000 4800f6bf 480009d6 0800c8b3 0800c9b4 0820d6d7 8080cf00 8080d000
 d8: 8408faea 0800d6db 0800d7dc 0800ea00 0800eb00 488002d6 802abfd3 4018ff00
 e0: 4800f600 4800ffc8 4800ffc9 480009e5 0820e5e6 8180c800 8180c900 488002e5
 e8: 802a00e4 4018ff00 8100ea00 8100eb00 4800f000 0880b3b3 0890b4b4 006400f5
-f0: 0880cfcf 0890d0d0 40e0f6bf 48900001 4018fff9 0880cfcf 0890d0d0 0890eaea
+f0: 0880cfcf 0890d0d0 40e0ffbf 48900001 4018fff9 0880cfcf 0890d0d0 0890eaea
 f8: 0890ebeb 802a00ed 4018ff00

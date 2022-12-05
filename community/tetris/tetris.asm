@@ -741,8 +741,8 @@ rem_bits_loop
 	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
 	rol	rem_bits_value+1		; The carry result is discarded.
 	
-	; Count cleared lines, but only on first iteration (to avoid 10x points)
-	insn ALEB_TOC_INSN	#(-GAMEBOARD_COLS),	line_clr_i	; If this is the first iteration of rem_bits (first column), store 1 in carry
+	; Count cleared lines, but only on last iteration (to avoid 10x points)
+	insn ALEB_TOC_INSN	#-1,	line_clr_i	; If this is the last iteration of rem_bits (last column), store 1 in carry
 	adcto	#0,	lines_cleared	; Add carry to lines cleared
 	
 	jmp	rem_bits_loop_end
