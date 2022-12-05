@@ -198,6 +198,7 @@ piece_kind	insn CLRA_INSN	piece_kind,	0
 piece_x	insn CLRA_INSN	piece_x,	0
 piece_y	insn CLRA_INSN	piece_y,	0
 piece_rotation	insn CLRA_INSN	piece_rotation,	0
+undo_retry_count	insn CLRA_INSN	undo_retry_count,	0
 
 	; Game board
 	;
@@ -272,7 +273,12 @@ prev_piece_rotation	insn CLRA_INSN	prev_piece_rotation,	0
 	; We don't have to reset the current piece_x, piece_y, piece_rotation here since
 	; undo_piece_state is about to do it for us from the prev_ values we just cleared.
 	
-main_undo_then_render	jsr	undo_piece_state_ret,	undo_piece_state
+main_undo_then_render
+	; Guard against an infinite undo loop. If we're in one, it means a GAME OVER condition.
+	incjne	undo_retry_count,	main_not_game_over	; Check if out of undo retries.
+	insn OUTC_JMP_INSN	#0x58,	stop	; Print 'X' and halt.
+main_not_game_over
+	jsr	undo_piece_state_ret,	undo_piece_state
 main_render_fresh_piece
 	; Clear any existing piece from the stage
 	
@@ -323,6 +329,7 @@ main_check_collision
 	st	#stamp_piece_coll_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
 	jne	tmp,	main_undo_then_render	; We have a collision. Undo changes and re-render.
+	st	#-2,	undo_retry_count	; Reset retry count every time an undo isn't required.
 main_full_render
 	; Stamp to board
 	st	#stamp_piece_merge_op,	stamp_piece_op
