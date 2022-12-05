@@ -56,6 +56,7 @@ ST_JMP_INSN	equ	0x08080000	; Stores [aa] --> [bb] and jumps to bb.
 OUTC_JMP_INSN	equ	0x98080000	; Writes [aa] to the console and jumps to bb. WRA and WRB are set to make OUT write to console.
 LSR_JCC_INSN	equ	0x820A0000	; Rotates [aa] right, writes the result back to [aa], and jumps if the shifted out bit (carry output) was clear.
 INCJMP_INSN	equ	0x80280000	; Stores [aa] + 1 --> [aa] and unconditionally jumps to bb
+CLRJMP_INSN	equ	0x81080000	; Stores 0 --> [aa] and unconditionally jumps to bb
 
 ; Pieces templates
 ;
@@ -199,6 +200,7 @@ piece_rotation	insn CLRA_INSN	piece_rotation,	0
 piece_x	insn CLRA_INSN	piece_x,	0
 piece_y	insn CLRA_INSN	piece_y,	0
 undo_retry_count	insn CLRA_INSN	undo_retry_count,	0
+rendering_flag	insn CLRA_INSN	rendering_flag,	0
 
 	; Game board
 	;
@@ -280,9 +282,7 @@ prev_piece_y	insn CLRA_INSN	prev_piece_y,	0
 	
 main_undo_then_render
 	; Guard against an infinite undo loop. If we're in one, it means a GAME OVER condition.
-	incjne	undo_retry_count,	main_not_game_over	; Check if out of undo retries.
-	insn OUTC_JMP_INSN	#0x58,	stop	; Print 'X' and halt.
-main_not_game_over
+	incjeq	undo_retry_count,	game_over	; Check if out of undo retries.
 	jsr	undo_piece_state_ret,	undo_piece_state
 main_render_fresh_piece
 	; Clear any existing piece from the stage
@@ -336,12 +336,12 @@ main_check_collision
 	jne	tmp,	main_undo_then_render	; We have a collision. Undo changes and re-render.
 	st	#-2,	undo_retry_count	; Reset retry count every time an undo isn't required.
 main_full_render
+	jne	stamp_flag,	main_do_stamp
+	jo	rendering_flag,	main_skip_render	; Skip rendering if rendering is disabled
+main_do_stamp
 	; Stamp to board
 	st	#stamp_piece_merge_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
-
-	; Print game board to console
-	jsr	render_board_ret,	render_board
 
 	; If stamp flag set, clear the completed lines and do not unstamp it from the board. Instead, move onto the next piece.
 	jeq	stamp_flag,	main_no_stamp_flag
@@ -349,10 +349,13 @@ main_full_render
 	jsr	line_clr_ret,	line_clr
 	jmp	main_next_piece
 main_no_stamp_flag
+	; Print game board to console
+	jsr	render_board_ret,	render_board
 
 	; Clear piece from board
 	st	#stamp_piece_clear_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
+main_skip_render
 
 	; Save the piece state so that if the change causes a collision, previous state can be restored.
 	jsr	save_piece_state_ret,	save_piece_state
@@ -363,7 +366,7 @@ main_no_stamp_flag
 main_read_input
 	inwait	tmp
 	neg	tmp	; Invert tmp so we can incjeq
-	
+
 	; --------------
 	; Input 2 = Drop
 	; --------------
@@ -391,6 +394,10 @@ main_read_input
 	; Input 9 = Rotate right
 	; --------------
 	incjeq	tmp,	main_rot_right
+	; --------------
+	; Input A = Toggle rendering.
+	; --------------
+	incjeq	tmp,	main_toggle_rendering
 
 	; Unknown input, read user input again.
 	insn OUTC_JMP_INSN	#0x3F,	main_read_input	; Print '?'
@@ -433,6 +440,8 @@ main_rot_right
 
 main_hard_drop
 	insn INCJMP_INSN	hard_drop_flag,	main_move_drop
+main_toggle_rendering
+	insn INCJMP_INSN	rendering_flag,	main_read_input
 main_end
 
 save_piece_state
@@ -453,18 +462,14 @@ undo_piece_state_ret	jmp	0
 ; Piece rotation. 4 different values for each direction. {0,1,2,3}. Only uses bottom two bits, so can increment forever.
 ;
 prep_piece
-	st	piece_kind,	prep_piece_target	; We're rendering the current piece_kind
-	
 	; Calculate jump table address for piece value
 	;
 	; Jump address = prep_piece_jmp + (2 * prep_piece_number) + prep_piece_rot.1
-	;
-	; Get the second bit from prep_piece_rot into carry flag
-	lsrto	piece_rotation,	tmp	; We're rendering the current piece_rotation
-	lsr	tmp
-	adcto	prep_piece_target,	prep_piece_target
-	; Add jump table base address
-	addto	#prep_piece_jmp,	prep_piece_target
+	st	#prep_piece_jmp,	prep_piece_target
+	lsrto	piece_rotation,	tmp
+	lsr	tmp		; Get the second bit from prep_piece_rot into carry flag
+	adcto	piece_kind,	prep_piece_target	; Add the carry into prep_piece_target
+	addto	piece_kind,	prep_piece_target
 	; Do the jump
 prep_piece_target	jmp	0
 prep_piece_jmp	; Begin jump table
@@ -754,6 +759,9 @@ rem_bits_A	; If Carry Clear
 	rol	rem_bits_result+1		; Carry from rotating result is discarded.
 rem_bits_loop_end	incjne	tmp,	rem_bits_loop	; Loop
 rem_bits_ret	jmp	0		; Return from subroutine
+
+game_over
+	insn OUTC_JMP_INSN	#0x58,	stop	; Print 'X' and halt.
 
 PROGRAM_SIZE	; Placeholder label to easily see how big the program is from the symbol table.
 PROGRAM_FREE_SPACE	equ	(256-PROGRAM_SIZE)
