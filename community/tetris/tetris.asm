@@ -339,15 +339,16 @@ main_full_render
 	; Stamp to board
 	st	#stamp_piece_merge_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
-	
+
+	; Print game board to console
+	jsr	render_board_ret,	render_board
+
 	; If stamp flag set, clear the completed lines and do not unstamp it from the board. Instead, move onto the next piece.
 	jeq	stamp_flag,	main_no_stamp_flag
 	; Clear completed lines
 	jsr	line_clr_ret,	line_clr
 	jmp	main_next_piece
 main_no_stamp_flag
-	; Print game board to console
-	jsr	render_board_ret,	render_board
 
 	; Clear piece from board
 	st	#stamp_piece_clear_op,	stamp_piece_op
