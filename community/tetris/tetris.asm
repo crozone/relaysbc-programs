@@ -259,6 +259,11 @@ gameboard
 	insn 0x00000000	,	0xFF	; no-op/clc, but specified as custom instruction se we can set B value.
 	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at column 11
 main_next_piece
+	; Clear stamp flag
+stamp_flag	insn CLRA_INSN	stamp_flag,	0
+	; Clear hard drop flag
+hard_drop_flag	insn CLRA_INSN	hard_drop_flag,	0
+
 	; Choose the next piece kind.
 	; TODO: Actual random generator. Currently only cycles through pieces incrementally.
 	; Increment from 0 -> 6, then wrap.
@@ -335,12 +340,10 @@ main_full_render
 	st	#stamp_piece_merge_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
 	
-	; If stamp flag set, do not clear piece. Instead, jump to main_next_piece.
+	; If stamp flag set, clear the completed lines and do not unstamp it from the board. Instead, move onto the next piece.
 	jeq	stamp_flag,	main_no_stamp_flag
 	; Clear completed lines
 	jsr	line_clr_ret,	line_clr
-	; Clear stamp flag
-stamp_flag	insn CLRA_INSN	stamp_flag,	0
 	jmp	main_next_piece
 main_no_stamp_flag
 	; Print game board to console
@@ -349,7 +352,7 @@ main_no_stamp_flag
 	; Clear piece from board
 	st	#stamp_piece_clear_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
-	
+
 	; Save the piece state so that if the change causes a collision, previous state can be restored.
 	jsr	save_piece_state_ret,	save_piece_state
 
@@ -380,9 +383,14 @@ main_read_input
 	rsbto	#01,	tmp
 	jeq	tmp,	main_rot_left
 	; --------------
+	; Input 8 = Hard drop
+	; --------------
+	rsbto	#01,	tmp
+	jeq	tmp,	main_hard_drop
+	; --------------
 	; Input 9 = Rotate right
 	; --------------
-	rsbto	#02,	tmp
+	rsbto	#01,	tmp
 	jeq	tmp,	main_rot_right
 
 	; Unknown input, read user input again.
@@ -402,24 +410,29 @@ main_move_drop_2
 	; Check collision with gameboard
 	st	#stamp_piece_coll_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
-	jeq	tmp,	main_full_render	; No collision, re-render board.
+	jeq	tmp,	main_move_drop_3	; If no collision, jump to main_move_drop_3
 	; We had a gameboard collision downwards.
 	; Set the stamp flag. The piece will be stamped during main_full_render.
 	insn INCJMP_INSN	stamp_flag,	main_undo_then_render	; Undo piece movement to move piece back up one, then re-render board and restart game loop.
+main_move_drop_3
+	; No collision.
+	je	hard_drop_flag,	main_full_render	; No hard drop, re-render board.
+	; Hard drop.
+	; We skip the main loop where the previous piece position is saved, so update the prevous y manually here.
+	st	piece_y,	prev_piece_y
+	jmp	main_move_drop	; Immediately do the next drop.
 main_move_left
 	dec	piece_x
 	jmp	main_check_collision
 main_move_right
-	;inc	piece_x
-	;jmp	main_check_collision
 	insn INCJMP_INSN	piece_x,	main_check_collision
 main_rot_left
 	dec	piece_rotation
 	jmp	main_render_fresh_piece
 main_rot_right
-	;inc	piece_rotation
-	;jmp	main_render_fresh_piece
 	insn INCJMP_INSN	piece_rotation,	main_render_fresh_piece
+main_hard_drop
+	insn INCJMP_INSN	hard_drop_flag,	main_move_drop
 main_end
 
 save_piece_state
