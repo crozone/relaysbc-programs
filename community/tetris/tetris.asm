@@ -425,10 +425,11 @@ main_move_left
 main_move_right
 	insn INCJMP_INSN	piece_x,	main_check_collision
 main_rot_left
+	insn INCJMP_INSN	piece_rotation,	main_render_fresh_piece
+main_rot_right
 	dec	piece_rotation
 	jmp	main_render_fresh_piece
-main_rot_right
-	insn INCJMP_INSN	piece_rotation,	main_render_fresh_piece
+
 main_hard_drop
 	insn INCJMP_INSN	hard_drop_flag,	main_move_drop
 main_end
