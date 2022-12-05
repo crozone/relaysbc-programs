@@ -33,6 +33,8 @@ GAMEBOARD_SIZE	equ	(GAMEBOARD_STRIDE*GAMEBOARD_COLS)	; Gameboard total size = st
 
 PIECE_STAGE_SIZE	equ	(GAMEBOARD_STRIDE*4)	; The piece stage is the same height as the gameboard, but only 4 wide.
 
+PIECE_X_OFFSET	equ	3	; The piece always spawns at x = 0. This offsets the piece so that x = 0 aligns with the center of the board.
+
 SPACE_CHAR	equ	0x20	; Space
 BLOCK_CHAR	equ	0x23	; #
 EMPTY_CHAR	equ	0x7E 	; ~
@@ -190,7 +192,71 @@ tmp	halt
 	org	0x01
 main
 	; Clear all variables and gameboard
-	jsr	reset_game_state_ret,	reset_game_state
+
+lines_cleared	insn CLRA_INSN	lines_cleared,	0
+piece_kind	insn CLRA_INSN	piece_kind,	0
+piece_x	insn CLRA_INSN	piece_x,	0
+piece_y	insn CLRA_INSN	piece_y,	0
+piece_rotation	insn CLRA_INSN	piece_rotation,	0
+
+	; Game board
+	;
+	; The gameboard is made up of bytes stacked vertically.
+	; There are two bytes end to end for each column, 10 colums wide.
+	; This makes a 16x10 game board, totalling 20 bytes.
+	; The lower, even index byte is at the bottom of the board. The higher, odd index byte is at the top.
+	; The less significant bits in each byte are towards the bottom of the board, the higher significant bits are towards the top.
+	;
+	; Ideally we would use three bytes per row to make a 24x10 gameboard in 30 bytes,
+	; but this increases both gameboard storage size and the code required to deal with it.
+	;
+	; Gameboard layout (byte.bit):
+	;
+	; 1.7 3.7 5.7 7.7 9.7 11.7 13.7 15.7 17.7 19.7
+	; 1.6 3.6 5.6 7.6 9.6 11.6 13.6 15.6 17.6 19.6
+	; 1.5 3.5 5.5 7.5 9.5 11.5 13.5 15.5 17.5 19.5
+	; 1.4 3.4 5.4 7.4 9.4 11.4 13.4 15.4 17.4 19.4
+	; 1.3 3.3 5.3 7.3 9.3 11.3 13.3 15.3 17.3 19.3
+	; 1.2 3.2 5.2 7.2 9.2 11.2 13.2 15.2 17.2 19.2
+	; 1.1 3.1 5.1 7.1 9.1 11.1 13.1 15.1 17.1 19.1
+	; 1.0 3.0 5.0 7.0 9.0 11.0 13.0 15.0 17.0 19.0
+	; 0.7 2.7 4.7 6.7 8.7 10.7 12.7 14.7 16.7 18.7
+	; 0.6 2.6 4.6 6.6 8.6 10.6 12.6 14.6 16.6 18.6
+	; 0.5 2.5 4.5 6.5 8.5 10.5 12.5 14.5 16.5 18.5
+	; 0.4 2.4 4.4 6.4 8.4 10.4 12.4 14.4 16.4 18.4
+	; 0.3 2.3 4.3 6.3 8.3 10.3 12.3 14.3 16.3 18.3
+	; 0.2 2.2 4.2 6.2 8.2 10.2 12.2 14.2 16.2 18.2
+	; 0.1 2.1 4.1 6.1 8.1 10.1 12.1 14.1 16.1 18.1
+	; 0.0 2.0 4.0 6.0 8.0 10.0 12.0 14.0 16.0 18.0
+	;
+	; Neat trick: Since every instruction of the gameboard would normally be a HALT instruction and mostly wasted,
+	; we can actually use the instruction to clear it's own B value. This gives us gameboard clearing and piece stage clearing "for free".
+
+	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at column -1
+	insn 0x00000000	,	0xFF
+gameboard
+	insn CLRA_INSN	gameboard+0,	0
+	insn CLRA_INSN	gameboard+1,	0
+	insn CLRA_INSN	gameboard+2,	0
+	insn CLRA_INSN	gameboard+3,	0
+	insn CLRA_INSN	gameboard+4,	0
+	insn CLRA_INSN	gameboard+5,	0
+	insn CLRA_INSN	gameboard+6,	0
+	insn CLRA_INSN	gameboard+7,	0
+	insn CLRA_INSN	gameboard+8,	0
+	insn CLRA_INSN	gameboard+9,	0
+	insn CLRA_INSN	gameboard+10,	0
+	insn CLRA_INSN	gameboard+11,	0
+	insn CLRA_INSN	gameboard+12,	0
+	insn CLRA_INSN	gameboard+13,	0
+	insn CLRA_INSN	gameboard+14,	0
+	insn CLRA_INSN	gameboard+15,	0
+	insn CLRA_INSN	gameboard+16,	0
+	insn CLRA_INSN	gameboard+17,	0
+	insn CLRA_INSN	gameboard+18,	0
+	insn CLRA_INSN	gameboard+19,	0
+	insn 0x00000000	,	0xFF	; no-op/clc, but specified as custom instruction se we can set B value.
+	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at column 11
 main_next_piece
 	; Choose the next piece kind.
 	; TODO: Actual random generator. Currently only cycles through pieces incrementally.
@@ -199,14 +265,47 @@ main_next_piece
 	adcto	#1,	piece_kind	; If carry set, increment by 2, otherwise increment by 1.
 	andto	#0x07,	piece_kind	; Clear all bits above first three so that value wraps.
 	
-	; Set location and rotation
-	st	#3,	prev_piece_x
-	st	#0,	prev_piece_y
-	st	#0,	prev_piece_rotation
+	; Reset piece location and rotation.
+prev_piece_x	insn CLRA_INSN	prev_piece_x,	0
+prev_piece_y	insn CLRA_INSN	prev_piece_y,	0
+prev_piece_rotation	insn CLRA_INSN	prev_piece_rotation,	0
+	; We don't have to reset the current piece_x, piece_y, piece_rotation here since
+	; undo_piece_state is about to do it for us from the prev_ values we just cleared.
+	
 main_undo_then_render	jsr	undo_piece_state_ret,	undo_piece_state
 main_render_fresh_piece
 	; Clear any existing piece from the stage
-	jsr	clear_piece_stage_ret,	clear_piece_stage
+	
+	; Piece stage
+	;
+	; Piece stage layout (byte.bit):
+	;
+	; 1.7 3.7 5.7 7.7
+	; 1.6 3.6 5.6 7.6
+	; 1.5 3.5 5.5 7.5
+	; 1.4 3.4 5.4 7.4
+	; 1.3 3.3 5.3 7.3
+	; 1.2 3.2 5.2 7.2
+	; 1.1 3.1 5.1 7.1
+	; 1.0 3.0 5.0 7.0
+	; 0.7 2.7 4.7 6.7
+	; 0.6 2.6 4.6 6.6
+	; 0.5 2.5 4.5 6.5
+	; 0.4 2.4 4.4 6.4
+	; 0.3 2.3 4.3 6.3
+	; 0.2 2.2 4.2 6.2
+	; 0.1 2.1 4.1 6.1
+	; 0.0 2.0 4.0 6.0
+	;
+piece_stage
+	insn CLRA_INSN	piece_stage+0,	0
+	insn CLRA_INSN	piece_stage+1,	0
+	insn CLRA_INSN	piece_stage+2,	0
+	insn CLRA_INSN	piece_stage+3,	0
+	insn CLRA_INSN	piece_stage+4,	0
+	insn CLRA_INSN	piece_stage+5,	0
+	insn CLRA_INSN	piece_stage+6,	0
+	insn CLRA_INSN	piece_stage+7,	0
 	
 	; Prepare a piece by rendering current piece_kind at piece_rotation
 	jsr	prep_piece_ret,	prep_piece
@@ -231,7 +330,7 @@ main_full_render
 	
 	; If stamp flag set, do not clear piece. Instead, jump to main_next_piece.
 	jeq	stamp_flag,	main_no_stamp_flag
-	; Check line clear
+	; Clear completed lines
 	jsr	line_clr_ret,	line_clr
 	; Clear stamp flag
 stamp_flag	insn CLRA_INSN	stamp_flag,	0
@@ -239,7 +338,7 @@ stamp_flag	insn CLRA_INSN	stamp_flag,	0
 main_no_stamp_flag
 	; Print game board to console
 	jsr	render_board_ret,	render_board
-main_full_render_clr
+
 	; Clear piece from board
 	st	#stamp_piece_clear_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
@@ -429,7 +528,7 @@ shift_piece_ret	jmp	0	; Return from subroutine
 stamp_piece
 	; Prep pointers
 	st	#piece_stage,	stamp_piece_ps_ptr
-	st	#gameboard,	stamp_piece_gb_ptr
+	st	#(gameboard+(PIECE_X_OFFSET*2)),	stamp_piece_gb_ptr
 	addto	piece_x,	stamp_piece_gb_ptr
 	addto	piece_x,	stamp_piece_gb_ptr	; stamp_piece_gb_ptr = #gameboard + 2 * piece_x
 	
@@ -636,114 +735,7 @@ rem_bits_A	; If Carry Clear
 rem_bits_loop_end	incjne	tmp,	rem_bits_loop	; Loop
 rem_bits_ret	jmp	0		; Return from subroutine
 
-; VARIABLES
-
-; Game state
-;
-
-; reset_game_state: Resets all game variables and the game board.
-reset_game_state
-
-lines_cleared	insn CLRA_INSN	lines_cleared,	0
-piece_kind	insn CLRA_INSN	piece_kind,	0
-piece_rotation	insn CLRA_INSN	piece_rotation,	0
-piece_x	insn CLRA_INSN	piece_x,	0
-piece_y	insn CLRA_INSN	piece_y,	0
-prev_piece_rotation	insn CLRA_INSN	prev_piece_rotation,	0
-prev_piece_x	insn CLRA_INSN	prev_piece_x,	0
-prev_piece_y	insn CLRA_INSN	prev_piece_y,	0
-
-; Game board
-;
-; The gameboard is made up of bytes stacked vertically.
-; There are two bytes end to end for each column, 10 colums wide.
-; This makes a 16x10 game board, totalling 20 bytes.
-; The lower, even index byte is at the bottom of the board. The higher, odd index byte is at the top.
-; The less significant bits in each byte are towards the bottom of the board, the higher significant bits are towards the top.
-;
-; Ideally we would use three bytes per row to make a 24x10 gameboard in 30 bytes,
-; but this increases both gameboard storage size and the code required to deal with it.
-;
-; Gameboard layout (byte.bit):
-;
-; 1.7 3.7 5.7 7.7 9.7 11.7 13.7 15.7 17.7 19.7
-; 1.6 3.6 5.6 7.6 9.6 11.6 13.6 15.6 17.6 19.6
-; 1.5 3.5 5.5 7.5 9.5 11.5 13.5 15.5 17.5 19.5
-; 1.4 3.4 5.4 7.4 9.4 11.4 13.4 15.4 17.4 19.4
-; 1.3 3.3 5.3 7.3 9.3 11.3 13.3 15.3 17.3 19.3
-; 1.2 3.2 5.2 7.2 9.2 11.2 13.2 15.2 17.2 19.2
-; 1.1 3.1 5.1 7.1 9.1 11.1 13.1 15.1 17.1 19.1
-; 1.0 3.0 5.0 7.0 9.0 11.0 13.0 15.0 17.0 19.0
-; 0.7 2.7 4.7 6.7 8.7 10.7 12.7 14.7 16.7 18.7
-; 0.6 2.6 4.6 6.6 8.6 10.6 12.6 14.6 16.6 18.6
-; 0.5 2.5 4.5 6.5 8.5 10.5 12.5 14.5 16.5 18.5
-; 0.4 2.4 4.4 6.4 8.4 10.4 12.4 14.4 16.4 18.4
-; 0.3 2.3 4.3 6.3 8.3 10.3 12.3 14.3 16.3 18.3
-; 0.2 2.2 4.2 6.2 8.2 10.2 12.2 14.2 16.2 18.2
-; 0.1 2.1 4.1 6.1 8.1 10.1 12.1 14.1 16.1 18.1
-; 0.0 2.0 4.0 6.0 8.0 10.0 12.0 14.0 16.0 18.0
-;
-; Neat trick: Since every instruction of the gameboard would normally be a HALT instruction and mostly wasted,
-; we can actually use the instruction to clear it's own B value. This gives us gameboard clearing and piece stage clearing "for free".
-
-	insn 0x00000000	,	0xFF		; A wall for the gameboard to provide collisions at column -1
-	insn 0x00000000	,	0xFF
-
-gameboard
-	insn CLRA_INSN	gameboard+0,	0
-	insn CLRA_INSN	gameboard+1,	0
-	insn CLRA_INSN	gameboard+2,	0
-	insn CLRA_INSN	gameboard+3,	0
-	insn CLRA_INSN	gameboard+4,	0
-	insn CLRA_INSN	gameboard+5,	0
-	insn CLRA_INSN	gameboard+6,	0
-	insn CLRA_INSN	gameboard+7,	0
-	insn CLRA_INSN	gameboard+8,	0
-	insn CLRA_INSN	gameboard+9,	0
-	insn CLRA_INSN	gameboard+10,	0
-	insn CLRA_INSN	gameboard+11,	0
-	insn CLRA_INSN	gameboard+12,	0
-	insn CLRA_INSN	gameboard+13,	0
-	insn CLRA_INSN	gameboard+14,	0
-	insn CLRA_INSN	gameboard+15,	0
-	insn CLRA_INSN	gameboard+16,	0
-	insn CLRA_INSN	gameboard+17,	0
-	insn CLRA_INSN	gameboard+18,	0
-	insn CLRA_INSN	gameboard+19,	0
-	insn 0x00000000	,	0xFF	; no-op/clc, but specified as custom instruction se we can set B value.
-	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at column 11
-reset_game_state_ret	jmp	0
-
-; Piece stage
-;
-; Piece stage layout (byte.bit):
-;
-; 1.7 3.7 5.7 7.7
-; 1.6 3.6 5.6 7.6
-; 1.5 3.5 5.5 7.5
-; 1.4 3.4 5.4 7.4
-; 1.3 3.3 5.3 7.3
-; 1.2 3.2 5.2 7.2
-; 1.1 3.1 5.1 7.1
-; 1.0 3.0 5.0 7.0
-; 0.7 2.7 4.7 6.7
-; 0.6 2.6 4.6 6.6
-; 0.5 2.5 4.5 6.5
-; 0.4 2.4 4.4 6.4
-; 0.3 2.3 4.3 6.3
-; 0.2 2.2 4.2 6.2
-; 0.1 2.1 4.1 6.1
-; 0.0 2.0 4.0 6.0
-;
-clear_piece_stage
-piece_stage	;skip	PIECE_STAGE_SIZE
-	insn CLRA_INSN	piece_stage+0,	0
-	insn CLRA_INSN	piece_stage+1,	0
-	insn CLRA_INSN	piece_stage+2,	0
-	insn CLRA_INSN	piece_stage+3,	0
-	insn CLRA_INSN	piece_stage+4,	0
-	insn CLRA_INSN	piece_stage+5,	0
-	insn CLRA_INSN	piece_stage+6,	0
-	insn CLRA_INSN	piece_stage+7,	0
-clear_piece_stage_ret	jmp	0
 PROGRAM_SIZE	; Placeholder label to easily see how big the program is from the symbol table.
+PROGRAM_FREE_SPACE	equ	(256-PROGRAM_SIZE)
+
+
