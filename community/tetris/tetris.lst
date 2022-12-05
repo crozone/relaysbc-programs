@@ -197,9 +197,9 @@
 ; 195                     
 ; 196     01 8100_0100    lines_cleared	insn CLRA_INSN	lines_cleared,	0
 ; 197     02 8100_0200    piece_kind	insn CLRA_INSN	piece_kind,	0
-; 198     03 8100_0300    piece_x	insn CLRA_INSN	piece_x,	0
-; 199     04 8100_0400    piece_y	insn CLRA_INSN	piece_y,	0
-; 200     05 8100_0500    piece_rotation	insn CLRA_INSN	piece_rotation,	0
+; 198     03 8100_0300    piece_rotation	insn CLRA_INSN	piece_rotation,	0
+; 199     04 8100_0400    piece_x	insn CLRA_INSN	piece_x,	0
+; 200     05 8100_0500    piece_y	insn CLRA_INSN	piece_y,	0
 ; 201     06 8100_0600    undo_retry_count	insn CLRA_INSN	undo_retry_count,	0
 ; 202                     
 ; 235                     
@@ -233,9 +233,9 @@
 ; 270     21 40e0_0602    	insn ALEB_TOC_INSN	#6,	piece_kind	; Set carry if piece_kind >= 6.
 ; 271     22 4890_0102    	adcto	#1,	piece_kind	; If carry set, increment by 2, otherwise increment by 1.
 ; 272     23 4980_0702    	andto	#0x07,	piece_kind	; Clear all bits above first three so that value wraps.
-; 275     24 8100_2400    prev_piece_x	insn CLRA_INSN	prev_piece_x,	0
-; 276     25 8100_2500    prev_piece_y	insn CLRA_INSN	prev_piece_y,	0
-; 277     26 8100_2600    prev_piece_rotation	insn CLRA_INSN	prev_piece_rotation,	0
+; 275     24 8100_2400    prev_piece_rotation	insn CLRA_INSN	prev_piece_rotation,	0
+; 276     25 8100_2500    prev_piece_x	insn CLRA_INSN	prev_piece_x,	0
+; 277     26 8100_2600    prev_piece_y	insn CLRA_INSN	prev_piece_y,	0
 ; 283     27 802a_0629    	incjne	undo_retry_count,	main_not_game_over	; Check if out of undo retries.
 ; 284     28 d808_5800    	insn OUTC_JMP_INSN	#0x58,	stop	; Print 'X' and halt.
 ; 286     29 8408_6865    	jsr	undo_piece_state_ret,	undo_piece_state
@@ -248,7 +248,7 @@
 ; 318     30 8100_3000    	insn CLRA_INSN	piece_stage+6,	0
 ; 319     31 8100_3100    	insn CLRA_INSN	piece_stage+7,	0
 ; 322     32 8408_9069    	jsr	prep_piece_ret,	prep_piece
-; 325     33 0800_0400    	st	piece_y,	tmp
+; 325     33 0800_0500    	st	piece_y,	tmp
 ; 326     34 8408_9f91    	jsr	shift_piece_ret,	shift_piece
 ; 334     35 4800_aaa9    	st	#stamp_piece_coll_op,	stamp_piece_op
 ; 335     36 8408_b6a0    	jsr	stamp_piece_ret,	stamp_piece
@@ -279,7 +279,7 @@
 ; 392     4c 8022_005f    	incjeq	tmp,	main_rot_right
 ; 393                     
 ; 395     4d d808_3f42    	insn OUTC_JMP_INSN	#0x3F,	main_read_input	; Print '?'
-; 398     4e 48e0_0104    	dec	piece_y
+; 398     4e 48e0_0105    	dec	piece_y
 ; 399     4f 4800_ff00    	st	#-1,	tmp
 ; 400     50 8408_9f91    	jsr	shift_piece_ret,	shift_piece
 ; 403     51 0062_0053    	jeq	tmp,	main_move_drop_2
@@ -289,24 +289,24 @@
 ; 411     55 0062_0057    	jeq	tmp,	main_move_drop_3	; If no collision, jump to main_move_drop_3
 ; 414     56 8028_1f27    	insn INCJMP_INSN	stamp_flag,	main_undo_then_render	; Undo piece movement to move piece back up one, then re-render board and restart game loop.
 ; 417     57 020a_2039    	je	hard_drop_flag,	main_full_render	; No hard drop, re-render board.
-; 420     58 0800_0425    	st	piece_y,	prev_piece_y
+; 420     58 0800_0526    	st	piece_y,	prev_piece_y
 ; 421     59 4018_ff4e    	jmp	main_move_drop	; Immediately do the next drop.
-; 423     5a 48e0_0103    	dec	piece_x
+; 423     5a 48e0_0104    	dec	piece_x
 ; 424     5b 4018_ff35    	jmp	main_check_collision
-; 426     5c 8028_0335    	insn INCJMP_INSN	piece_x,	main_check_collision
-; 428     5d 48e0_0105    	dec	piece_rotation
+; 426     5c 8028_0435    	insn INCJMP_INSN	piece_x,	main_check_collision
+; 428     5d 48e0_0103    	dec	piece_rotation
 ; 429     5e 4018_ff2a    	jmp	main_render_fresh_piece
-; 431     5f 8028_052a    	insn INCJMP_INSN	piece_rotation,	main_render_fresh_piece
+; 431     5f 8028_032a    	insn INCJMP_INSN	piece_rotation,	main_render_fresh_piece
 ; 433     60 8028_204e    	insn INCJMP_INSN	hard_drop_flag,	main_move_drop
 ; 435                     
-; 437     61 0800_0526    	st	piece_rotation,	prev_piece_rotation
-; 438     62 0800_0324    	st	piece_x,	prev_piece_x
-; 439     63 0800_0425    	st	piece_y,	prev_piece_y
+; 437     61 0800_0324    	st	piece_rotation,	prev_piece_rotation
+; 438     62 0800_0425    	st	piece_x,	prev_piece_x
+; 439     63 0800_0526    	st	piece_y,	prev_piece_y
 ; 440     64 4018_ff00    save_piece_state_ret	jmp	0
 ; 441                     
-; 443     65 0800_2605    	st	prev_piece_rotation,	piece_rotation
-; 444     66 0800_2403    	st	prev_piece_x,	piece_x
-; 445     67 0800_2504    	st	prev_piece_y,	piece_y
+; 443     65 0800_2403    	st	prev_piece_rotation,	piece_rotation
+; 444     66 0800_2504    	st	prev_piece_x,	piece_x
+; 445     67 0800_2605    	st	prev_piece_y,	piece_y
 ; 446     68 4018_ff00    undo_piece_state_ret	jmp	0
 ; 447                     
 ; 448                     ; Prepare piece stage subroutine
@@ -315,7 +315,7 @@
 ; 451                     ; Piece rotation. 4 different values for each direction. {0,1,2,3}. Only uses bottom two bits, so can increment forever.
 ; 452                     ;
 ; 454     69 0800_026e    	st	piece_kind,	prep_piece_target	; We're rendering the current piece_kind
-; 461     6a 0a00_0500    	lsrto	piece_rotation,	tmp	; We're rendering the current piece_rotation
+; 461     6a 0a00_0300    	lsrto	piece_rotation,	tmp	; We're rendering the current piece_rotation
 ; 462     6b 0a00_0000    	lsr	tmp
 ; 463     6c 0890_6e6e    	adcto	prep_piece_target,	prep_piece_target
 ; 465     6d 4880_6f6e    	addto	#prep_piece_jmp,	prep_piece_target
@@ -336,7 +336,7 @@
 ; 482     7c 4808_747d    	insn ST_JMP_INSN	#L_PIECE_FLIP,	prep_piece_value
 ; 483     7d 4010_ff00    prep_piece_value	nop	; prep_piece_value stores the jump table result.
 ; 484                     
-; 486     7e 0202_0586    	jo	piece_rotation,	prep_piece_hor
+; 486     7e 0202_0386    	jo	piece_rotation,	prep_piece_hor
 ; 488     7f 0800_7d2f    	st	prep_piece_value,	piece_stage+5
 ; 489     80 4980_f02f    	andto	#0xF0,	piece_stage+5	; Clear lower 4 bits
 ; 490     81 4800_fc00    	st	#-4,	tmp
@@ -391,8 +391,8 @@
 ; 545                     ;
 ; 548     a0 4800_2aa6    	st	#piece_stage,	stamp_piece_ps_ptr
 ; 549     a1 4800_0fa8    	st	#(gameboard+(PIECE_X_OFFSET*2)),	stamp_piece_gb_ptr
-; 550     a2 0880_03a8    	addto	piece_x,	stamp_piece_gb_ptr
-; 551     a3 0880_03a8    	addto	piece_x,	stamp_piece_gb_ptr	; stamp_piece_gb_ptr = #gameboard + 2 * piece_x
+; 550     a2 0880_04a8    	addto	piece_x,	stamp_piece_gb_ptr
+; 551     a3 0880_04a8    	addto	piece_x,	stamp_piece_gb_ptr	; stamp_piece_gb_ptr = #gameboard + 2 * piece_x
 ; 554     a4 4800_f800    	st	#-PIECE_STAGE_SIZE,	tmp
 ; 556                     
 ; 557     a5 8100_a500    stamp_piece_ps_val	insn CLRA_INSN	stamp_piece_ps_val,	0	; Self clearing variable stamp_piece_ps_val
@@ -619,10 +619,10 @@
 ; main_rot_right = 0x5f
 ; main_undo_then_render = 0x27
 ; piece_kind = 0x2
-; piece_rotation = 0x5
+; piece_rotation = 0x3
 ; piece_stage = 0x2a
-; piece_x = 0x3
-; piece_y = 0x4
+; piece_x = 0x4
+; piece_y = 0x5
 ; prep_piece = 0x69
 ; prep_piece_hor = 0x86
 ; prep_piece_hor_i = 0x6e
@@ -636,9 +636,9 @@
 ; prep_piece_value = 0x7d
 ; prep_piece_vert = 0x7f
 ; prep_piece_vert_loop = 0x82
-; prev_piece_rotation = 0x26
-; prev_piece_x = 0x24
-; prev_piece_y = 0x25
+; prev_piece_rotation = 0x24
+; prev_piece_x = 0x25
+; prev_piece_y = 0x26
 ; rem_bits = 0xea
 ; rem_bits_A = 0xf5
 ; rem_bits_loop = 0xed
@@ -690,21 +690,21 @@
 18: 81001800 81001900 81001a00 81001b00 81001c00 000000ff 000000ff 81001f00
 20: 81002000 40e00602 48900102 49800702 81002400 81002500 81002600 802a0629
 28: d8085800 84086865 81002a00 81002b00 81002c00 81002d00 81002e00 81002f00
-30: 81003000 81003100 84089069 08000400 84089f91 4800aaa9 8408b6a0 006a0027
+30: 81003000 81003100 84089069 08000500 84089f91 4800aaa9 8408b6a0 006a0027
 38: 4800fe06 4800aea9 8408b6a0 00621f3e 8408dfcb 4018ff1f 8408cab7 4800b0a9
 40: 8408b6a0 84086461 e8000000 08600000 48800100 8022004e 48800100 8022005a
-48: 48800100 8022005c 8022005d 80220060 8022005f d8083f42 48e00104 4800ff00
+48: 48800100 8022005c 8022005d 80220060 8022005f d8083f42 48e00105 4800ff00
 50: 84089f91 00620053 80281f39 4800aaa9 8408b6a0 00620057 80281f27 020a2039
-58: 08000425 4018ff4e 48e00103 4018ff35 80280335 48e00105 4018ff2a 8028052a
-60: 8028204e 08000526 08000324 08000425 4018ff00 08002605 08002403 08002504
-68: 4018ff00 0800026e 0a000500 0a000000 08906e6e 48806f6e 4018ff00 4808667d
+58: 08000526 4018ff4e 48e00104 4018ff35 80280435 48e00103 4018ff2a 8028032a
+60: 8028204e 08000324 08000425 08000526 4018ff00 08002403 08002504 08002605
+68: 4018ff00 0800026e 0a000300 0a000000 08906e6e 48806f6e 4018ff00 4808667d
 70: 4808667d 4808f07d 4808f07d 4808277d 4808727d 4808367d 4808367d 4808637d
-78: 4808637d 4808717d 4808477d 4808177d 4808747d 4010ff00 02020586 08007d2f
+78: 4808637d 4808717d 4808477d 4808177d 4808747d 4010ff00 02020386 08007d2f
 80: 4980f02f 4800fc00 08807d7d 802a0082 08007d2d 4018ff90 4800fd6e 48003189
 88: 0800898b c0800000 0a007d7d 0a100000 48e00289 40e02a89 006c0088 802a6e87
 90: 4018ff00 0062009f 0202309f 02022e9f 02022c9f 02022a9f 0a003131 0a103030
 98: 0a002f2f 0a102e2e 0a002d2d 0a102c2c 0a002b2b 0a102a2a 802a0092 4018ff00
-a0: 48002aa6 48000fa8 088003a8 088003a8 4800f800 8100a500 8080a500 8100a700
+a0: 48002aa6 48000fa8 088004a8 088004a8 4800f800 8100a500 8080a500 8100a700
 a8: 8080a700 4018ff00 0980a5a7 0062a7b3 0800a700 4018ffb6 0880a5a7 4018ffb1
 b0: 09c0a5a7 0800a8b2 0800a700 8020a600 8020a800 802a00a5 4018ff00 480001bc
 b8: 488009bc 480080c3 4800f6c4 0800c300 81800000 006a00bf d8087ec0 d8002300
