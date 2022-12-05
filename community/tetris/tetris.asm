@@ -361,37 +361,35 @@ main_no_stamp_flag
 	; ----------
 main_read_input
 	inwait	tmp
+	neg	tmp	; Invert tmp so we can incjeq
 	
 	; --------------
 	; Input 2 = Drop
 	; --------------
-	rsbto	#02,	tmp
-	jeq	tmp,	main_move_drop
+	inc	tmp
+	incjeq	tmp,	main_move_drop
 	; --------------
 	; Input 4 = Left
 	; --------------
-	rsbto	#02,	tmp
-	jeq	tmp,	main_move_left
+	inc	tmp
+	incjeq	tmp,	main_move_left
 	; --------------
 	; Input 6 = Right
 	; --------------
-	rsbto	#02,	tmp
-	jeq	tmp,	main_move_right
+	inc	tmp
+	incjeq	tmp,	main_move_right
 	; --------------
 	; Input 7 = Rotate left
 	; --------------
-	rsbto	#01,	tmp
-	jeq	tmp,	main_rot_left
+	incjeq	tmp,	main_rot_left
 	; --------------
 	; Input 8 = Hard drop
 	; --------------
-	rsbto	#01,	tmp
-	jeq	tmp,	main_hard_drop
+	incjeq	tmp,	main_hard_drop
 	; --------------
 	; Input 9 = Rotate right
 	; --------------
-	rsbto	#01,	tmp
-	jeq	tmp,	main_rot_right
+	incjeq	tmp,	main_rot_right
 
 	; Unknown input, read user input again.
 	insn OUTC_JMP_INSN	#0x3F,	main_read_input	; Print '?'
