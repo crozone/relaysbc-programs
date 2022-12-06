@@ -277,7 +277,7 @@ int step()
         outc_print();
         printf("Input: ");
         fgets(inwait_buf, INWAITBUF_SIZE - 1, stdin);
-        val = strtol(inwait_buf, NULL, 0);
+        val = strtol(inwait_buf, NULL, 16);
         
         // Based on current pic implementation, entire write data is replaced with character.
         write_data = val & 0xFF;
