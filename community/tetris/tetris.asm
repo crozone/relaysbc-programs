@@ -193,14 +193,13 @@ tmp	halt
 	org	0x01
 main
 	; Clear all variables and gameboard
-
 lines_cleared	insn CLRA_INSN	lines_cleared,	0
 piece_kind	insn CLRA_INSN	piece_kind,	0
 piece_rotation	insn CLRA_INSN	piece_rotation,	0
 piece_x	insn CLRA_INSN	piece_x,	0
 piece_y	insn CLRA_INSN	piece_y,	0
 undo_retry_count	insn CLRA_INSN	undo_retry_count,	0
-rendering_flag	insn CLRA_INSN	rendering_flag,	0
+rendering_off_flag	insn CLRA_INSN	rendering_off_flag,	0
 
 	; Game board
 	;
@@ -266,6 +265,10 @@ stamp_flag	insn CLRA_INSN	stamp_flag,	0
 	; Clear hard drop flag
 hard_drop_flag	insn CLRA_INSN	hard_drop_flag,	0
 
+	; ---------------
+	; Setup new piece
+	; ---------------
+
 	; Choose the next piece kind.
 	; TODO: Actual random generator. Currently only cycles through pieces incrementally.
 	; Increment from 0 -> 6, then wrap.
@@ -284,7 +287,9 @@ main_undo_then_render
 	; Guard against an infinite undo loop. If we're in one, it means a GAME OVER condition.
 	incjeq	undo_retry_count,	game_over	; Check if out of undo retries.
 	
-	; Undo piece state
+	; ------------------
+	; Restore undo state
+	; ------------------
 	st	prev_piece_rotation,	piece_rotation
 	st	prev_piece_x,	piece_x
 	st	prev_piece_y,	piece_y
@@ -333,56 +338,68 @@ piece_stage
 	; Since the player isn't attempting to drop the piece, and we're re-rendering the state,
 	; we don't actually care if there was a floor collision.
 	; We only care if there's a gameboard collision.
+	
+	jne	stamp_flag,	main_full_render	; If stamping, skip collision detection.
 main_check_collision
 	; Check if there is going to be a collision
 	st	#stamp_piece_coll_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
 	jne	tmp,	main_undo_then_render	; We have a collision. Undo changes and re-render.
-	st	#-2,	undo_retry_count	; Reset retry count every time an undo isn't required.
-main_full_render
-	; Render the board and potentially stamp the piece down as well.
-	; * If  stamp_flag &&  rendering_flag: Stamp board, render board, do next piece.
-	; * If  stamp_flag && !rendering_flag: Stamp board, do next piece.
-	; * If !stamp_flag &&  rendering_flag: Stamp board, render board, unstamp board.
-	; * If !stamp_flag && !rendering_flag: Skip everything.
-	
-	jne	stamp_flag,	main_full_render_stamp	; Stamp flag is set, we must at least stamp to board. [stamp_flag]
-	jne	rendering_flag,	main_skip_all_render	; Skip rendering if rendering is disabled. [!stamp_flag && !rendering_flag]
-main_full_render_stamp
-	; Stamp to board
-	st	#stamp_piece_merge_op,	stamp_piece_op
-	jsr	stamp_piece_ret,	stamp_piece
-	
-	jne	rendering_flag,	main_full_render_no_rb	; Skip rendering if rendering is disabled. [stamp_flag && !rendering_flag]
-	; Print game board to console
-	jsr	render_board_ret,	render_board
-main_full_render_no_rb
-	; If stamp flag set, clear the completed lines and do not unstamp it from the board. Instead, move onto the next piece.
-	jeq	stamp_flag,	main_full_render_clr
-	; Clear completed lines
-	jsr	line_clr_ret,	line_clr
-	jmp	main_next_piece		; TODO: Print character here to indicate new piece? 'P'?
-main_full_render_clr				; [!stamp_flag && rendering_flag]
-	; Clear piece from board
-	st	#stamp_piece_clear_op,	stamp_piece_op
-	jsr	stamp_piece_ret,	stamp_piece
-main_skip_all_render
+	; ------------
+	; No collision
+	; ------------
 main_save_piece_state
+	; ----------------
+	; Store undo state
+	; ----------------
+	;
 	; Save the piece state so that if the change causes a collision, previous state can be restored.
 	st	piece_rotation,	prev_piece_rotation
 	st	piece_x,	prev_piece_x
 	st	piece_y,	prev_piece_y
+	
+	; Check for hard drop mode.
+	jne	hard_drop_flag,	main_move_drop	; No hard drop
+	clr	stamp_flag		; Clear stamp flag
+main_full_render
+	st	#-2,	undo_retry_count	; Reset retry count every time an undo isn't required.
+	
+	; -----------------
+	; Render game board
+	; -----------------
+	jne	rendering_off_flag,	main_stamp_piece_only	; Skip rendering if rendering flag bit 0 is set
+main_force_render	st	#stamp_piece_merge_op,	stamp_piece_op
+	jsr	stamp_piece_ret,	stamp_piece	; Stamp piece to game board
+	jsr	render_board_ret,	render_board	; Print game board to console
+	jne	stamp_flag,	main_clear_lines	; If stamp flag is set, jump to clearing lines and new piece.
+	st	#stamp_piece_clear_op,	stamp_piece_op	; Clear piece from game board
+	jsr	stamp_piece_ret,	stamp_piece
+main_stamp_piece_only
+	jeq	stamp_flag,	main_stamp_piece_end	; If stamp flag isn't set, skip all stamp actions.
+	; -------------------------------------
+	; Stamp piece permanently to game board
+	; -------------------------------------
+	st	#stamp_piece_merge_op,	stamp_piece_op
+	jsr	stamp_piece_ret,	stamp_piece	; Stamp piece to game board
+main_clear_lines
+	; Clear completed lines
+	jsr	line_clr_ret,	line_clr
+	; Jump to preparing the next piece.
+	jmp	main_next_piece		; TODO: Print character here to indicate new piece? 'P'?
+main_stamp_piece_end
+
 main_read_input
 	; ----------
 	; Read input
 	; ----------
 	inwait	tmp
-	neg	tmp	; Invert tmp so we can incjeq
+	andto	#0x0F,	tmp	; Clear upper bits to allow compatibility with ASCII inputs
+	neg	tmp		; Invert tmp so we can incjeq
 	
 	; --------------
 	; Input 0 = Re-render board
 	; --------------
-	jeq	tmp,	main_full_render_stamp
+	jeq	tmp,	main_force_render
 	; --------------
 	; Input 2 = Drop
 	; --------------
@@ -411,19 +428,19 @@ main_read_input
 	; --------------
 	incjeq	tmp,	main_rot_right
 	; --------------
-	; Input A = Enable board rendering.
+	; Input A = Enable board rendering
 	; --------------
-	incjeq	tmp,	main_enable_render
+	incjeq	tmp,	main_enable_rendering
 	; --------------
-	; Input B = Disable board rendering (still render on stamp)
+	; Input B = Disable board rendering
 	; --------------
-	incjeq	tmp,	main_disable_render
+	incjeq	tmp,	main_disable_rendering
 	; --------------
 	; Input C = New game
 	; --------------
-	;incjeq	tmp,	main
+	incjeq	tmp,	main
 	; --------------
-	; Input C = Exit game
+	; Input D = Exit game
 	; --------------
 	incjeq	tmp,	game_over
 
@@ -434,43 +451,26 @@ main_move_drop
 	dec	piece_y
 	st	#-1,	tmp
 	jsr	shift_piece_ret,	shift_piece
-	
-	; Check collision with floor
-	jeq	tmp,	main_move_drop_2
+	jeq	tmp,	main_move_drop_2	; Check collision with floor
 	; We had a floor collision.
 	; Set the stamp flag. The piece will be stamped during main_full_render.
 	insn INCJMP_INSN	stamp_flag,	main_full_render	; Re-render board and restart game loop.
-main_move_drop_2
-	; Check collision with gameboard
-	st	#stamp_piece_coll_op,	stamp_piece_op
-	jsr	stamp_piece_ret,	stamp_piece
-	jeq	tmp,	main_move_drop_3	; If no collision, jump to main_move_drop_3
-	; We had a gameboard collision downwards.
-	; Set the stamp flag. The piece will be stamped during main_full_render.
-	insn INCJMP_INSN	stamp_flag,	main_undo_then_render	; Undo piece movement to move piece back up one, then re-render board and restart game loop.
-main_move_drop_3
-	; No collision.
-	jeq	hard_drop_flag,	main_full_render	; No hard drop, re-render board.
-	; Hard drop.
-	; We skip the main loop where the previous piece position is saved, so update the prevous y manually here.
-	st	piece_y,	prev_piece_y
-	jmp	main_move_drop	; Immediately do the next drop.
+main_move_drop_2	insn INCJMP_INSN	stamp_flag,	main_check_collision	; Set stamp flag and check collision
+
 main_move_left
-	dec	piece_x
-	jmp	main_check_collision
+	rsbto	#2,	piece_x
 main_move_right
 	insn INCJMP_INSN	piece_x,	main_check_collision
+main_rot_right
+	rsbto	#2,	piece_rotation
 main_rot_left
 	insn INCJMP_INSN	piece_rotation,	main_render_fresh_piece
-main_rot_right
-	dec	piece_rotation
-	jmp	main_render_fresh_piece
 main_hard_drop
 	insn INCJMP_INSN	hard_drop_flag,	main_move_drop	; TODO: LSROJMP instead, so that it can never wrap around even after 255 iterations
-main_enable_render
-	insn CLRJMP_INSN	rendering_flag,	main_read_input
-main_disable_render
-	insn INCJMP_INSN	rendering_flag,	main_read_input	; TODO: LSROJMP instead, so that it can never wrap around even after 255 iterations
+main_enable_rendering
+	insn CLRJMP_INSN	rendering_off_flag,	main_read_input
+main_disable_rendering
+	insn INCJMP_INSN	rendering_off_flag,	main_read_input	; TODO: LSROJMP instead, so that it can never wrap around even after 255
 main_end
 
 ; Prepare piece stage subroutine
@@ -621,6 +621,9 @@ stamp_piece_ret	jmp	0	; Return from subroutine
 ;         Decide whether to render a block or empty character by ANDing the gameboard ptr value with the current bitmask
 ;
 render_board
+get_full_lines_mask	outc	#CR_CHAR		; get_full_lines_mask: variable for get_full_lines
+	outc	#LF_CHAR
+
 	st	#(GAMEBOARD_STRIDE-1),	render_board_ptr	; Start the render_board_ptr with an offset of 1 to render the top half of the board.
 ; LOOP A
 render_board_loop_a
@@ -659,9 +662,6 @@ render_board_col	outc	#LF_CHAR		; render_board_col: The current column iteration
 	rsbto	#(gameboard+1),	render_board_ptr	; TODO: Can replace with ALEB_TOC_INSN + jcs
 	; If the render_board_ptr is now < 0, we have just rendered the lowest 8 rows of the board and are done.
 	jge	render_board_ptr,	render_board_loop_a	; Otherwise continue LOOP A.
-	
-get_full_lines_mask	outc	#CR_CHAR		; get_full_lines_mask: variable for get_full_lines
-	outc	#LF_CHAR
 ; END LOOP A
 render_board_ret	jmp	0		; Return from subroutine.
 
