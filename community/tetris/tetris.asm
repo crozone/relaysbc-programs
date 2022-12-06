@@ -54,7 +54,7 @@ ALTB_TOC_INSN	equ	0x00C00000	; Stores [aa] < [bb] --> Carry.
 ALEB_TOC_INSN	equ	0x00E00000	; Stores [aa] <= [bb] --> Carry.
 ST_JMP_INSN	equ	0x08080000	; Stores [aa] --> [bb] and jumps to bb.
 OUTC_JMP_INSN	equ	0x98080000	; Writes [aa] to the console and jumps to bb. WRA and WRB are set to make OUT write to console.
-LSR_JCC_INSN	equ	0x820A0000	; Rotates [aa] right, writes the result back to [aa], and jumps if the shifted out bit (carry output) was clear.
+LSR_JCC_INSN	equ	0x820A0000	; Shifts [aa] right, writes the result back to [aa], and jumps if the shifted out bit (carry output) was clear.
 INCJMP_INSN	equ	0x80280000	; Stores [aa] + 1 --> [aa] and unconditionally jumps to bb
 CLRJMP_INSN	equ	0x81080000	; Stores 0 --> [aa] and unconditionally jumps to bb
 
@@ -283,7 +283,11 @@ prev_piece_y	insn CLRA_INSN	prev_piece_y,	0
 main_undo_then_render
 	; Guard against an infinite undo loop. If we're in one, it means a GAME OVER condition.
 	incjeq	undo_retry_count,	game_over	; Check if out of undo retries.
-	jsr	undo_piece_state_ret,	undo_piece_state
+	
+	; Undo piece state
+	st	prev_piece_rotation,	piece_rotation
+	st	prev_piece_x,	piece_x
+	st	prev_piece_y,	piece_y
 main_render_fresh_piece
 	; Clear any existing piece from the stage
 	
@@ -336,37 +340,49 @@ main_check_collision
 	jne	tmp,	main_undo_then_render	; We have a collision. Undo changes and re-render.
 	st	#-2,	undo_retry_count	; Reset retry count every time an undo isn't required.
 main_full_render
-	jne	stamp_flag,	main_do_stamp
-	jo	rendering_flag,	main_skip_render	; Skip rendering if rendering is disabled
-main_do_stamp
+	; Render the board and potentially stamp the piece down as well.
+	; * If  stamp_flag &&  rendering_flag: Stamp board, render board, do next piece.
+	; * If  stamp_flag && !rendering_flag: Stamp board, do next piece.
+	; * If !stamp_flag &&  rendering_flag: Stamp board, render board, unstamp board.
+	; * If !stamp_flag && !rendering_flag: Skip everything.
+	
+	jne	stamp_flag,	main_full_render_stamp	; Stamp flag is set, we must at least stamp to board. [stamp_flag]
+	jne	rendering_flag,	main_skip_all_render	; Skip rendering if rendering is disabled. [!stamp_flag && !rendering_flag]
+main_full_render_stamp
 	; Stamp to board
 	st	#stamp_piece_merge_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
-
-	; If stamp flag set, clear the completed lines and do not unstamp it from the board. Instead, move onto the next piece.
-	jeq	stamp_flag,	main_no_stamp_flag
-	; Clear completed lines
-	jsr	line_clr_ret,	line_clr
-	jmp	main_next_piece
-main_no_stamp_flag
+	
+	jne	rendering_flag,	main_full_render_no_rb	; Skip rendering if rendering is disabled. [stamp_flag && !rendering_flag]
 	; Print game board to console
 	jsr	render_board_ret,	render_board
-
+main_full_render_no_rb
+	; If stamp flag set, clear the completed lines and do not unstamp it from the board. Instead, move onto the next piece.
+	jeq	stamp_flag,	main_full_render_clr
+	; Clear completed lines
+	jsr	line_clr_ret,	line_clr
+	jmp	main_next_piece		; TODO: Print character here to indicate new piece? 'P'?
+main_full_render_clr				; [!stamp_flag && rendering_flag]
 	; Clear piece from board
 	st	#stamp_piece_clear_op,	stamp_piece_op
 	jsr	stamp_piece_ret,	stamp_piece
-main_skip_render
-
+main_skip_all_render
+main_save_piece_state
 	; Save the piece state so that if the change causes a collision, previous state can be restored.
-	jsr	save_piece_state_ret,	save_piece_state
-
+	st	piece_rotation,	prev_piece_rotation
+	st	piece_x,	prev_piece_x
+	st	piece_y,	prev_piece_y
+main_read_input
 	; ----------
 	; Read input
 	; ----------
-main_read_input
 	inwait	tmp
 	neg	tmp	; Invert tmp so we can incjeq
-
+	
+	; --------------
+	; Input 0 = Re-render board
+	; --------------
+	jeq	tmp,	main_full_render_stamp
 	; --------------
 	; Input 2 = Drop
 	; --------------
@@ -395,9 +411,21 @@ main_read_input
 	; --------------
 	incjeq	tmp,	main_rot_right
 	; --------------
-	; Input A = Toggle rendering.
+	; Input A = Enable board rendering.
 	; --------------
-	incjeq	tmp,	main_toggle_rendering
+	incjeq	tmp,	main_enable_render
+	; --------------
+	; Input B = Disable board rendering (still render on stamp)
+	; --------------
+	incjeq	tmp,	main_disable_render
+	; --------------
+	; Input C = New game
+	; --------------
+	;incjeq	tmp,	main
+	; --------------
+	; Input C = Exit game
+	; --------------
+	incjeq	tmp,	game_over
 
 	; Unknown input, read user input again.
 	insn OUTC_JMP_INSN	#0x3F,	main_read_input	; Print '?'
@@ -422,7 +450,7 @@ main_move_drop_2
 	insn INCJMP_INSN	stamp_flag,	main_undo_then_render	; Undo piece movement to move piece back up one, then re-render board and restart game loop.
 main_move_drop_3
 	; No collision.
-	je	hard_drop_flag,	main_full_render	; No hard drop, re-render board.
+	jeq	hard_drop_flag,	main_full_render	; No hard drop, re-render board.
 	; Hard drop.
 	; We skip the main loop where the previous piece position is saved, so update the prevous y manually here.
 	st	piece_y,	prev_piece_y
@@ -437,24 +465,13 @@ main_rot_left
 main_rot_right
 	dec	piece_rotation
 	jmp	main_render_fresh_piece
-
 main_hard_drop
-	insn INCJMP_INSN	hard_drop_flag,	main_move_drop
-main_toggle_rendering
-	insn INCJMP_INSN	rendering_flag,	main_read_input
+	insn INCJMP_INSN	hard_drop_flag,	main_move_drop	; TODO: LSROJMP instead, so that it can never wrap around even after 255 iterations
+main_enable_render
+	insn CLRJMP_INSN	rendering_flag,	main_read_input
+main_disable_render
+	insn INCJMP_INSN	rendering_flag,	main_read_input	; TODO: LSROJMP instead, so that it can never wrap around even after 255 iterations
 main_end
-
-save_piece_state
-	st	piece_rotation,	prev_piece_rotation
-	st	piece_x,	prev_piece_x
-	st	piece_y,	prev_piece_y
-save_piece_state_ret	jmp	0
-
-undo_piece_state
-	st	prev_piece_rotation,	piece_rotation
-	st	prev_piece_x,	piece_x
-	st	prev_piece_y,	piece_y
-undo_piece_state_ret	jmp	0
 
 ; Prepare piece stage subroutine
 ; piece_kind = which piece to render. {0,1,2,3,4,5,6}
@@ -574,7 +591,7 @@ stamp_piece_coll_op	; Check for collision
 	andto	stamp_piece_ps_val,	stamp_piece_gb_val
 	jeq	stamp_piece_gb_val,	stamp_piece_loop_end	; If collision didn't occur, keep looping.
 	; Collision occured.
-	st	stamp_piece_gb_val,	tmp	; Store colliding bits in tmp
+	; Return, leaving a non-zero value in tmp.
 	jmp	stamp_piece_ret		; Break out of loop and exit
 stamp_piece_merge_op
 	; Since we know the gameboard is clear underneath the piece, we don't have to clear the bits first
@@ -743,7 +760,7 @@ rem_bits_loop
 	lsl	rem_bits_mask+0		; Logical shift left mask (0 -> bit 0)
 	rol	rem_bits_mask+1		; (bit 15 -> carry)
 	jcc	rem_bits_A		; GOTO A if carry clear
-	; If Carry Set
+	; If Carry Set, omit the bit from result
 	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
 	rol	rem_bits_value+1		; The carry result is discarded.
 	
@@ -752,7 +769,7 @@ rem_bits_loop
 	adcto	#0,	lines_cleared	; Add carry to lines cleared
 	
 	jmp	rem_bits_loop_end
-rem_bits_A	; If Carry Clear
+rem_bits_A	; If Carry Clear, include the bit in result
 	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
 	rol	rem_bits_value+1		; (bit 15 -> carry)
 	rol	rem_bits_result+0		; Rotate left to save the carry into result (carry -> bit 0)
