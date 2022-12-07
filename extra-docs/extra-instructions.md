@@ -30,10 +30,10 @@ If an instruction is "bb free", the bb value is not used at all. This allows the
 | 81C0_aabb | bic aa bb      | ~[aa] & [bb] &rarr; [aa]       | No  |
 | 0808_aabb | stjmp aa bb    | [aa] &rarr; [bb], bb &rarr; PC | No  |
 | 9808_aabb | outcjmp aa bb  | [aa] &rarr; serial console, bb &rarr; PC | No |
-| 820A_aabb | lsrjcc aa bb   | Shift right [aa], 0 &rarr; [aa].7, [aa].0 &rarr; C. If new C == 0 then bb &rarr; PC | No |
-| 8202_aabb | lsrjcs aa bb   | Shift right [aa], 0 &rarr; [aa].7, [aa].0 &rarr; C. If new C == 1 then bb &rarr; PC | No |
-| 821A_aabb | rorjcc aa bb   | Shift right [aa], C &rarr; [aa].7, [aa].0 &rarr; C. If new C == 0 then bb &rarr; PC | No |
-| 8212_aabb | rorjcs aa bb   | Shift right [aa], C &rarr; [aa].7, [aa].0 &rarr; C. If new C == 1 then bb &rarr; PC | No |
+| 820A_aabb | lsrje aa bb   | Shift right [aa], 0 &rarr; [aa].7, [aa].0 &rarr; C. If new C == 0 then bb &rarr; PC | No |
+| 8202_aabb | lsrjo aa bb   | Shift right [aa], 0 &rarr; [aa].7, [aa].0 &rarr; C. If new C == 1 then bb &rarr; PC | No |
+| 821A_aabb | rorje aa bb   | Shift right [aa], C &rarr; [aa].7, [aa].0 &rarr; C. If new C == 0 then bb &rarr; PC | No |
+| 8212_aabb | rorj0 aa bb   | Shift right [aa], C &rarr; [aa].7, [aa].0 &rarr; C. If new C == 1 then bb &rarr; PC | No |
 | 8028_aabb | incjmp aa bb   | [aa] + 1 &rarr; [aa], bb &rarr; PC | No |
 | 802C_aabb | incjcs aa bb   | [aa] + 1 &rarr; [aa]. If C == 1, bb &rarr; PC | No |
 | 8024_aabb | incjcc aa bb   | [aa] + 1 &rarr; [aa]. If C == 0, bb &rarr; PC | No |
@@ -224,7 +224,7 @@ Writes the value of [aa] (or #aa if immediate) to the serial console, and then j
 
 This is useful when printing characters to the console in a loop, since it saves an instruction compared to `outc` + `jmp`.
 
-### lsrjcc aa bb
+### lsrje aa bb
 
 820A_aabb
 
@@ -233,7 +233,7 @@ Shift right [aa], 0 &rarr; [aa].7, [aa].0 &rarr; C. If new C == 0 then bb &rarr;
 Equivalent to `lsr` and then `jcc`, but in a single instruction. Useful for looping and shifting a bitmask right, until the first 1 bit is shifted out.
 
 
-### lsrjcs aa bb
+### lsrjo aa bb
 
 8202_aabb
 
@@ -241,7 +241,7 @@ Shift right [aa], 0 &rarr; [aa].7, [aa].0 &rarr; C. If new C == 1 then bb &rarr;
 
 Equivalent to `lsr` and then `jcs`, but in a single instruction. Useful for looping and shifting a bitmask right, until the first 0 bit is shifted out.
 
-### rorjcc aa bb
+### rorje aa bb
 
 821A_aabb
 
@@ -249,7 +249,7 @@ Shift right [aa], C &rarr; [aa].7, [aa].0 &rarr; C. If new C == 0 then bb &rarr;
 
 Equivalent to `ror` and then `jcc`, but in a single instruction.
 
-### rorjcs aa bb
+### rorjo aa bb
 
 8212_aabb
 
