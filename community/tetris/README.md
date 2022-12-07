@@ -5,41 +5,41 @@ A Tetris clone implementation for the single board relay computer.
 ## Memory Map
 
 ```
-00: c810ff00 81000100 81000200 81000300 81000400 81000500 81000600 000000ff
-08: 000000ff 81000900 81000a00 81000b00 81000c00 81000d00 81000e00 81000f00
+00: c810ff00 81000100 81000200 81000300 81000400 81000500 81000600 81000700
+08: 000000ff 000000ff 81000a00 81000b00 81000c00 81000d00 81000e00 81000f00
 10: 81001000 81001100 81001200 81001300 81001400 81001500 81001600 81001700
-18: 81001800 81001900 81001a00 81001b00 81001c00 000000ff 000000ff 81001f00
-20: 81002000 40e00602 48900102 49800702 81002400 81002500 81002600 802a0629
-28: d8085800 84086865 81002a00 81002b00 81002c00 81002d00 81002e00 81002f00
-30: 81003000 81003100 84089069 08000500 84089f91 4800aaa9 8408b6a0 006a0027
-38: 4800fe06 4800aea9 8408b6a0 00621f3e 8408dfcb 4018ff1f 8408cab7 4800b0a9
-40: 8408b6a0 84086461 e8000000 08600000 48800100 8022004e 48800100 8022005a
-48: 48800100 8022005c 8022005d 80220060 8022005f d8083f42 48e00105 4800ff00
-50: 84089f91 00620053 80281f39 4800aaa9 8408b6a0 00620057 80281f27 020a2039
-58: 08000526 4018ff4e 48e00104 4018ff35 80280435 48e00103 4018ff2a 8028032a
-60: 8028204e 08000324 08000425 08000526 4018ff00 08002403 08002504 08002605
-68: 4018ff00 0800026e 0a000300 0a000000 08906e6e 48806f6e 4018ff00 4808667d
-70: 4808667d 4808f07d 4808f07d 4808277d 4808727d 4808367d 4808367d 4808637d
-78: 4808637d 4808717d 4808477d 4808177d 4808747d 4010ff00 02020386 08007d2f
-80: 4980f02f 4800fc00 08807d7d 802a0082 08007d2d 4018ff90 4800fd6e 48003189
-88: 0800898b c0800000 0a007d7d 0a100000 48e00289 40e02a89 006c0088 802a6e87
-90: 4018ff00 0062009f 0202309f 02022e9f 02022c9f 02022a9f 0a003131 0a103030
-98: 0a002f2f 0a102e2e 0a002d2d 0a102c2c 0a002b2b 0a102a2a 802a0092 4018ff00
-a0: 48002aa6 48000fa8 088004a8 088004a8 4800f800 8100a500 8080a500 8100a700
-a8: 8080a700 4018ff00 0980a5a7 0062a7b3 0800a700 4018ffb6 0880a5a7 4018ffb1
-b0: 09c0a5a7 0800a8b2 0800a700 8020a600 8020a800 802a00a5 4018ff00 480001bc
-b8: 488009bc 480080c3 4800f6c4 0800c300 81800000 006a00bf d8087ec0 d8002300
-c0: 488002bc 802ac4bb 48e014bc d8000d00 d8000a00 820ac3ba 48e00abc 0069bcb8
-c8: d8000d00 d8000a00 4018ff00 8408e9e0 006ac8cf 006ac9cf 4018ffdf 8100cf00
-d0: 8100d000 4800f6bf 480009d6 0800c8b3 0800c9b4 0820d6d7 8080cf00 8080d000
-d8: 8408faea 0800d6db 0800d7dc 0800ea00 0800eb00 488002d6 802abfd3 4018ff00
-e0: 4800f600 4800ffc8 4800ffc9 480009e5 0820e5e6 8180c800 8180c900 488002e5
-e8: 802a00e4 4018ff00 8100ea00 8100eb00 4800f000 0880b3b3 0890b4b4 006400f5
-f0: 0880cfcf 0890d0d0 40e0f6bf 48900001 4018fff9 0880cfcf 0890d0d0 0890eaea
-f8: 0890ebeb 802a00ed 4018ff00
+18: 81001800 81001900 81001a00 81001b00 81001c00 81001d00 000000ff 000000ff
+20: 81002000 81002100 40e00603 48900103 49800703 81002500 81002600 81002700
+28: 802207fe 08002504 08002605 08002706 81002c00 81002d00 81002e00 81002f00
+30: 81003000 81003100 81003200 81003300 8408986c 08000600 8408a799 006a2040
+38: 4800b2b1 8408bda8 006a0028 08000425 08000526 08000627 006a215f 48000020
+40: 4800fe07 006a0248 4800b5b1 8408bda8 8408d1be 006a204b 4800b7b1 8408bda8
+48: 0062204d 4800b5b1 8408bda8 8408fdd2 4018ff20 e8000000 49800f00 08600000
+50: 00620042 48800100 8022005f 48800100 80220065 48800100 80220066 80220067
+58: 80220069 80220068 8022006a 8022006b 80220001 802200fe d8083f4d 48e00106
+60: 4800ff00 8408a799 00620064 80282040 80282038 48e00205 80280538 48e00204
+68: 8028042c 8228215f 8108024d 8228024d 08000371 0a000491 02009100 08900371
+70: 48807271 4018ff00 4808f080 48080f80 4808cc80 4808cc80 4808e480 48084e80
+78: 48086c80 48086c80 4808e280 48088e80 4808c680 4808c680 4808e880 48082e80
+80: 4010ff00 020a048d 0800802f 4980f02f 4800fc00 08808080 802a0085 0800802d
+88: 02020398 020a9198 08002f31 08002d2f 81082d98 0202038f 02009100 4810fd71
+90: 48003391 c0800000 08009194 0a008080 0a100000 48e00291 40e22c91 802a7190
+98: 4018ff00 006200a7 020232a7 020230a7 02022ea7 02022ca7 0a003333 0a103232
+a0: 0a003131 0a103030 0a002f2f 0a102e2e 0a002d2d 0a102c2c 802a009a 4018ff00
+a8: 48002cae 480012b0 088005b0 088005b0 4800f800 8100ad00 8080ad00 8100af00
+b0: 8080af00 4018ff00 0980adaf 0062afba 4018ffbd 0880adaf 4018ffb8 09c0adaf
+b8: 0800b0b9 0800af00 8020ae00 8020b000 802a00ad 4018ff00 d8000d00 d8000a00
+c0: 480001c5 48800ac5 480080cc 4800f6cd 0800cc00 81800000 006a00c8 d8087ec9
+c8: d8002300 488002c5 802acdc4 48e014c5 d8000d00 d8000a00 820accc3 48e00bc5
+d0: 0069c5c1 4018ff00 4800f600 4800ffbe 4800ffbf 48000ad7 0820d7d8 8180be00
+d8: 8180bf00 488002d7 802a00d6 006abede 006abfde 4018fffd 8100de00 8100df00
+e0: 4800f6c8 48000ae5 0800beba 0800bfbb 0820e5e6 8080de00 8080df00 8100e700
+e8: 8100e800 4800f000 0880baba 0890bbbb 006400f2 0880dede 0890dfdf 40e0ffc8
+f0: 48900001 4018fff6 0880dede 0890dfdf 0890e7e7 0890e8e8 802a00ea 0800e5f9
+f8: 0800e6fa 0800e700 0800e800 488002e5 802ac8e2 4018ff00 d8085800
 ```
 
-Total instructions: 251/256
+Total instructions: 255/256
 
 ## Assembling the game
 
@@ -69,14 +69,19 @@ The keys 0-9, a-f on the keyboard can be used to emulate the relay computer nump
 
 The game is controlled with the relay computer numpad.
 
-| Key | Action                                      |
-| --- | ------------------------------------------- |
-| 2   | Move piece down                             |
-| 4   | Move piece left                             |
-| 6   | Move piece right                            |
-| 7   | Rotate piece left                           |
-| 8   | Hard drop piece (move down until collision) |
-| 9   | Rotate piece right                          |
+| Key | Action                                       |
+| --- | -------------------------------------------- |
+| 0   | Re-render the gameboard                      |
+| 2   | Move piece down                              |
+| 4   | Move piece left                              |
+| 6   | Move piece right                             |
+| 7   | Rotate piece left                            |
+| 8   | Hard drop piece (move down until collision)  |
+| 9   | Rotate piece right                           |
+| A   | Enable automatic rendering (default)         |
+| B   | Disable automatic rendering                  |
+| C   | New Game                                     |
+| D   | Exit game                                    |
 
 ## Demo
 
@@ -90,13 +95,14 @@ The lines cleared count is stored at address `0x01`
 
 ## Important symbols
 
-| Symbol         | Address |
-| -------------- | ------- |
-| lines_cleared  | 0x01    |
-| piece_kind     | 0x02    |
-| piece_rotation | 0x03    |
-| piece_x        | 0x04    |
-| piece_y        | 0x05    |
+| Symbol             | Address |
+| ------------------ | ------- |
+| lines_cleared      | 0x01    |
+| rendering_off_flag | 0x02    |
+| piece_kind         | 0x03    |
+| piece_rotation     | 0x04    |
+| piece_x            | 0x05    |
+| piece_y            | 0x06    |
 
 ## Technical details
 
@@ -110,10 +116,9 @@ The lines cleared count is stored at address `0x01`
 * The number of lines cleared is maintained as the score
 * Game over when new piece collides with existing pieces
 * Hard drop
+* Toggle gameboard rendering to improve speed
 
 ### Limitations and areas for improvement
-
-* The game has a passable rotation system, but it's not perfect. The implementation is optimised for fewest instructions, and not all pieces pivot quite as nicely they should (especially the T piece). This makes T-spins sometimes impossible. It may be possible to fix this with only a few instructions. This is #1 priority for future fixes.
 
 * Tetrominos are not randomly selected and instead simply cycle non-randomly. If anyone knows an rng algorithm that can pick a number from 0->6 in ~3 instructions, let me know!
 
@@ -247,6 +252,8 @@ The line clear bitmask is then used against each column in a rotation algorithm 
 Pieces are represented by a single byte constant. The lower 4 bits are half the piece, and the upper 4 bits are the other half. A mirrored version of the piece is also available to make rotations efficient, halving the amount of piece rendering code required.
 
 Pieces are rendered to an intermediary `piece_stage` buffer, which is the same format as the gameboard, but only 4x16 (8 bytes) in size. The piece stage only needs to be 4 columns wide since this is the widest any piece can be in any orientation.
+
+If the piece is an I, T, J, L piece (i.e. `piece_kind` is even) its position is tweaked so that it rotates about an axis correctly. 
 
 #### Piece stage layout (byte.bit):
 
