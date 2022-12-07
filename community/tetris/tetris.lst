@@ -1,6 +1,7 @@
 ; Pass 1...
+; tetris.asm:510: error: Undefined symbol 'prep_piece_hor_ptr'
 
-; 0 errors detected in pass 1
+; 1 errors detected in pass 1
 
 ; Pass 2...
 ; 1                       ; Tetris implementation
@@ -12,537 +13,588 @@
 ; 7                       ;
 ; 8                       ; Relay computer numpad is used to control the game.
 ; 9                       ;
-; 10                      ; 2: Move piece down
-; 11                      ; 4: Move piece left
-; 12                      ; 6: Move piece right
-; 13                      ; 7: Rotate piece left
-; 14                      ; 9: Rotate piece right
-; 15                      ;
-; 16                      ; Game is rendered to console output.
-; 17                      ;
-; 18                      ; TODO:
-; 19                      ;
-; 20                      ; * Game over (Current code infinite loops on game over)
-; 21                      ; * Further optimise code to free up some instruction space to implement above TODOs.
-; 22                      ;
-; 23                      
-; 24                      ; =========
-; 25                      ; Constants
-; 26                      ; =========
-; 27                      
-; 28                      ; Gameboard parameters
-; 29                      ; These constants are used for convenience. Changing the value won't change the actual sizes of the gameboards, code will need to be modified as well.
-; 30      0000_0000       GAMEBOARD_STRIDE	equ	2	; How many bytes high is the gameboard. 2 bytes = 16 rows.
-; 31      0000_0000       GAMEBOARD_COLS	equ	10	; How many columns wide is the gameboard. This is generic enough that it can be adjusted without altering any code.
-; 32      0000_0000       GAMEBOARD_SIZE	equ	(GAMEBOARD_STRIDE*GAMEBOARD_COLS)	; Gameboard total size = stride * columns
-; 33                      
-; 34      0000_0000       PIECE_STAGE_SIZE	equ	(GAMEBOARD_STRIDE*4)	; The piece stage is the same height as the gameboard, but only 4 wide.
-; 35                      
-; 36      0000_0000       PIECE_X_OFFSET	equ	3	; The piece always spawns at x = 0. This offsets the piece so that x = 0 aligns with the center of the board.
-; 37                      
-; 38      0000_0000       SPACE_CHAR	equ	0x20	; Space
-; 39      0000_0000       BLOCK_CHAR	equ	0x23	; #
-; 40      0000_0000       EMPTY_CHAR	equ	0x7E 	; ~
-; 41      0000_0000       BAR_CHAR	equ	0x7C	; |
-; 42                      
-; 43      0000_0000       CR_CHAR	equ	0x0D	; Carriage Return CR \r
-; 44      0000_0000       LF_CHAR	equ	0x0A	; Linefeed LF \n
-; 45                      
-; 46                      ; Additional custom instructions
-; 47                      ; To use these, call them like: insn INCTO_INSN aa, bb
-; 48      0000_0000       IMADD_INSN	equ	0xC0800000	; aa + [bb] --> [aa]. Immediate version of ADD. If aa is 0, allows single instruction LOAD of [bb] to [0].
-; 49      0000_0000       AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs [aa] and [bb], and stores in [aa].
-; 50      0000_0000       CLRA_INSN	equ	0x81000000	; Stores 0 --> [aa]. Implemented as [aa] & 0 --> [aa].
-; 51      0000_0000       INCA_INSN	equ	0x80200000	; Stores [aa] + 1 --> [aa] in one instruction.
-; 52      0000_0000       INCTO_INSN	equ	0x08200000	; Stores [aa] + 1 --> [bb] in one instruction.
-; 53      0000_0000       ALTB_TOC_INSN	equ	0x00C00000	; Stores [aa] < [bb] --> Carry.
-; 54      0000_0000       ALEB_TOC_INSN	equ	0x00E00000	; Stores [aa] <= [bb] --> Carry.
-; 55      0000_0000       ST_JMP_INSN	equ	0x08080000	; Stores [aa] --> [bb] and jumps to bb.
-; 56      0000_0000       OUTC_JMP_INSN	equ	0x98080000	; Writes [aa] to the console and jumps to bb. WRA and WRB are set to make OUT write to console.
-; 57      0000_0000       LSR_JCC_INSN	equ	0x820A0000	; Shifts [aa] right, writes the result back to [aa], and jumps if the shifted out bit (carry output) was clear.
-; 58      0000_0000       INCJMP_INSN	equ	0x80280000	; Stores [aa] + 1 --> [aa] and unconditionally jumps to bb
-; 59      0000_0000       CLRJMP_INSN	equ	0x81080000	; Stores 0 --> [aa] and unconditionally jumps to bb
-; 60                      
-; 61                      ; Pieces templates
-; 62                      ;
-; 63                      ; Piece patterns are stored as a single byte.
-; 64                      ; The 4 lsb bits represent the left of the piece, the 4 msb bits representing the right of the piece.
-; 65                      ; The alignment and bit direction matches the piece stage.
-; 66                      ;
-; 67                      ; A "flipped" version of each piece is also stored, which is similar to the piece being left-to-right bitswapped.
-; 68                      ; However using a dedicated version of the flipped piece removes the need for a bitswap subroutine,
-; 69                      ; which actually saves instructions overall, and also allows the pieces to be tweaked so that they rotate correctly.
-; 70                      ;
-; 71                      ; The Gameboy left-handed rotation system was used as a reference, but the code doesn't attempt to exactly adhere to any particular system,
-; 72                      ; it just attempts to look somewhat acceptable and use minimal instructions.
-; 73                      
-; 74                      
-; 75                      ; I piece
-; 76                      ;
-; 77                      ;3   7
-; 78                      ; 0 1
-; 79                      ; 0 1
-; 80                      ; 0 1
-; 81                      ; 0 1
-; 82                      ;0   4
-; 83      0000_0000       I_PIECE	equ	0xF0
-; 84      0000_0000       I_PIECE_FLIP	equ	I_PIECE	; I piece is the same flipped
-; 85                      
-; 86                      ; O (square) piece
-; 87                      ;
-; 88                      ;3   7
-; 89                      ; 0 0
-; 90                      ; 1 1
-; 91                      ; 1 1
-; 92                      ; 0 0
-; 93                      ;0   4
-; 94      0000_0000       O_PIECE	equ	0x66
-; 95      0000_0000       O_PIECE_FLIP	equ	O_PIECE	; Square is same in any rotation
-; 96                      
-; 97                      ; T piece
-; 98                      ;
-; 99                      ;3   7
-; 100                     ; 0 0
+; 10                      ; 0: Re-render the gameboard
+; 11                      ; 2: Move piece down
+; 12                      ; 4: Move piece left
+; 13                      ; 6: Move piece right
+; 14                      ; 7: Rotate piece left
+; 15                      ; 8: Hard drop piece
+; 16                      ; 9: Rotate piece right
+; 17                      ; A: Enable automatic gameboard rendering (default)
+; 18                      ; B: Disable automatic gameboard rendering
+; 19                      ; C: New Game
+; 20                      ; D: Exit game
+; 21                      ;
+; 22                      ; Game is rendered to console output.
+; 23                      ;
+; 24                      ; Note: If any more instructions are required for future features, render_board and line_clr are yet to be inlined (for readability),
+; 25                      ;       but doing so could save 4 instructions.
+; 26                      
+; 27                      ; =========
+; 28                      ; Constants
+; 29                      ; =========
+; 30                      
+; 31                      ; Gameboard parameters
+; 32                      ; These constants are used for convenience. Changing the value won't change the actual sizes of the gameboards, code will need to be modified as well.
+; 33      0000_0000       GAMEBOARD_STRIDE	equ	2	; How many bytes high is the gameboard. 2 bytes = 16 rows.
+; 34      0000_0000       GAMEBOARD_COLS	equ	10	; How many columns wide is the gameboard. This is generic enough that it can be adjusted without altering any code.
+; 35      0000_0000       GAMEBOARD_SIZE	equ	(GAMEBOARD_STRIDE*GAMEBOARD_COLS)	; Gameboard total size = stride * columns
+; 36                      
+; 37      0000_0000       PIECE_STAGE_SIZE	equ	(GAMEBOARD_STRIDE*4)	; The piece stage is the same height as the gameboard, but only 4 wide.
+; 38                      
+; 39      0000_0000       PIECE_X_OFFSET	equ	4	; The piece always spawns at x = 0. This offsets the piece so that x = 0 aligns with the center of the board.
+; 40                      
+; 41      0000_0000       BLOCK_CHAR	equ	0x23	; #
+; 42      0000_0000       EMPTY_CHAR	equ	0x7E 	; ~
+; 43                      
+; 44      0000_0000       CR_CHAR	equ	0x0D	; Carriage Return CR \r
+; 45      0000_0000       LF_CHAR	equ	0x0A	; Linefeed LF \n
+; 46                      
+; 47                      ; Additional custom instructions
+; 48                      ; To use these, call them like: insn INCTO_INSN aa, bb
+; 49      0000_0000       OTOC_INSN	equ	0x02000000	; [aa].0 --> C. Stores oddness of [aa] in Carry.
+; 50      0000_0000       IMADD_INSN	equ	0xC0800000	; aa + [bb] --> [aa]. Immediate version of ADD. If aa is 0, allows single instruction LOAD of [bb] to [0].
+; 51      0000_0000       AND_INSN	equ	0x81800000	; The WRA version of andto. ANDs [aa] and [bb], and stores in [aa].
+; 52      0000_0000       CLRA_INSN	equ	0x81000000	; Stores 0 --> [aa]. Implemented as [aa] & 0 --> [aa].
+; 53      0000_0000       INCA_INSN	equ	0x80200000	; Stores [aa] + 1 --> [aa] in one instruction.
+; 54      0000_0000       INCTO_INSN	equ	0x08200000	; Stores [aa] + 1 --> [bb] in one instruction.
+; 55      0000_0000       ALTB_TOC_INSN	equ	0x00C00000	; Stores [aa] < [bb] --> Carry.
+; 56      0000_0000       ALEB_TOC_INSN	equ	0x00E00000	; Stores [aa] <= [bb] --> Carry.
+; 57      0000_0000       STC_INSN	equ	0x08100000	; Stores [aa] + C --> [bb]
+; 58      0000_0000       STNC_INSN	equ	0x08300000	; Stores [aa] + ~C --> [bb]
+; 59      0000_0000       ST_JMP_INSN	equ	0x08080000	; Stores [aa] --> [bb] and jumps to bb.
+; 60      0000_0000       OUTC_JMP_INSN	equ	0x98080000	; Writes [aa] to the console and jumps to bb. WRA and WRB are set to make OUT write to console.
+; 61      0000_0000       LSR_JE_INSN	equ	0x820A0000	; Shifts [aa] right, writes the result back to [aa], and jumps if Z (ALU carry out) set.
+; 62      0000_0000       INC_JMP_INSN	equ	0x80280000	; Stores [aa] + 1 --> [aa] and unconditionally jumps to bb
+; 63      0000_0000       CLR_JMP_INSN	equ	0x81080000	; Stores 0 --> [aa] and unconditionally jumps to bb
+; 64      0000_0000       LSRO_JMP_INSN	equ	0x82280000	; Rotates [aa] right. 1 --> [aa].7. Z (ALU carry out) --> C. Unconditionally jumps to bb
+; 65                      
+; 66                      ; Pieces templates
+; 67                      ;
+; 68                      ; Piece patterns are stored as a single byte.
+; 69                      ; The 4 lsb bits represent the left of the piece, the 4 msb bits representing the right of the piece.
+; 70                      ; The alignment and bit direction matches the piece stage.
+; 71                      ;
+; 72                      ; A "flipped" version of each piece is also stored, which is similar to the piece being left-to-right bitswapped.
+; 73                      ; However using a dedicated version of the flipped piece removes the need for a bitswap subroutine,
+; 74                      ; which actually saves instructions overall, and also allows the pieces to be tweaked so that they rotate correctly.
+; 75                      ;
+; 76                      ; The Gameboy left-handed rotation system was used as a reference, but the code doesn't attempt to exactly adhere to any particular system,
+; 77                      ; it just attempts to look somewhat acceptable and use minimal instructions.
+; 78                      
+; 79                      ; Convention: Piece "major axis", aka the axis that it rotates around, should be on the right in unflipped form, and left in flipped form.
+; 80                      ; Piece kind indicies that are even require "adjustment" where they are shifted during piece rendering. Odd piece kinds do not.
+; 81                      ; The adjustment depends on whether the piece is rendering vertically or horizontally, and whether or not it is flipped.
+; 82                      ; Adjustment required:    {I, T, J, L}
+; 83                      ; No adjustment required: {O, S, Z}
+; 84                      
+; 85                      ; I piece
+; 86                      ;
+; 87                      ;3   7
+; 88                      ; 0 1
+; 89                      ; 0 1
+; 90                      ; 0 1
+; 91                      ; 0 1
+; 92                      ;0   4
+; 93      0000_0000       I_PIECE	equ	0xF0
+; 94                      
+; 95                      ; I piece flipped
+; 96                      ;
+; 97                      ;3   7
+; 98                      ; 1 0
+; 99                      ; 1 0
+; 100                     ; 1 0
 ; 101                     ; 1 0
-; 102                     ; 1 1
-; 103                     ; 1 0
-; 104                     ;0   4
-; 105     0000_0000       T_PIECE	equ	0x27
-; 106                     
-; 107                     ; T piece flipped
-; 108                     ;
-; 109                     ;3   7
+; 102                     ;0   4
+; 103     0000_0000       I_PIECE_FLIP	equ	0x0F
+; 104                     
+; 105                     ; O (square) piece
+; 106                     ;
+; 107                     ;3   7
+; 108                     ; 1 1
+; 109                     ; 1 1
 ; 110                     ; 0 0
-; 111                     ; 0 1
-; 112                     ; 1 1
-; 113                     ; 0 1
-; 114                     ;0   4
-; 115     0000_0000       T_PIECE_FLIP	equ	0x72
-; 116                     
-; 117                     ; S piece
-; 118                     ;
-; 119                     ;3   7
-; 120                     ; 0 0
-; 121                     ; 1 0
-; 122                     ; 1 1
-; 123                     ; 0 1
-; 124                     ;0   4
-; 125     0000_0000       S_PIECE	equ	0x36
-; 126     0000_0000       S_PIECE_FLIP	equ	S_PIECE	; S piece is the same rotated
-; 127                     
-; 128                     ; S piece
-; 129                     ;
-; 130                     ;3   7
-; 131                     ; 0 0
-; 132                     ; 0 1
-; 133                     ; 1 1
-; 134                     ; 1 0
-; 135                     ;0   4
-; 136     0000_0000       Z_PIECE	equ	0x63
-; 137     0000_0000       Z_PIECE_FLIP	equ	Z_PIECE	; Z piece is the same rotated
-; 138                     
-; 139                     ; J piece
-; 140                     ;
-; 141                     ;3   7
+; 111                     ; 0 0
+; 112                     ;0   4
+; 113     0000_0000       O_PIECE	equ	0xCC
+; 114     0000_0000       O_PIECE_FLIP	equ	O_PIECE	; Square is same in any rotation
+; 115                     
+; 116                     ; T piece
+; 117                     ;
+; 118                     ;3   7
+; 119                     ; 0 1
+; 120                     ; 1 1
+; 121                     ; 0 1
+; 122                     ; 0 0
+; 123                     ;0   4
+; 124     0000_0000       T_PIECE	equ	0xE4
+; 125                     
+; 126                     ; T piece flipped
+; 127                     ;
+; 128                     ;3   7
+; 129                     ; 1 0
+; 130                     ; 1 1
+; 131                     ; 1 0
+; 132                     ; 0 0
+; 133                     ;0   4
+; 134     0000_0000       T_PIECE_FLIP	equ	0x4E
+; 135                     
+; 136                     ; S piece
+; 137                     ;
+; 138                     ;3   7
+; 139                     ; 1 0
+; 140                     ; 1 1
+; 141                     ; 0 1
 ; 142                     ; 0 0
-; 143                     ; 0 1
-; 144                     ; 0 1
-; 145                     ; 1 1
-; 146                     ;0   4
-; 147     0000_0000       J_PIECE	equ	0x71
-; 148                     
-; 149                     ; J piece flipped
-; 150                     ;
-; 151                     ;3   7
-; 152                     ; 0 0
-; 153                     ; 1 1
-; 154                     ; 1 0
-; 155                     ; 1 0
-; 156                     ;0   4
-; 157     0000_0000       J_PIECE_FLIP	equ	0x47
-; 158                     
-; 159                     ; L piece
-; 160                     ;
-; 161                     ;3   7
-; 162                     ; 0 0
-; 163                     ; 1 0
-; 164                     ; 1 0
-; 165                     ; 1 1
-; 166                     ;0   4
-; 167     0000_0000       L_PIECE	equ	0x17
-; 168                     
-; 169                     ; L piece flipped
-; 170                     ;
-; 171                     ;3   7
-; 172                     ; 0 0
-; 173                     ; 1 1
-; 174                     ; 0 1
-; 175                     ; 0 1
-; 176                     ;0   4
-; 177     0000_0000       L_PIECE_FLIP	equ	0x74
-; 178                     
-; 179                     ; ================
-; 180                     ; Application code
-; 181                     ; ================
-; 182                     
-; 183                     ; Temporary variable tmp at address 0x00.
-; 184                     ;
-; 185                     ; Used as a halt catch for any jumps to null (0x00). This usually indicates a subroutine hasn't had its return address set.
-; 186                     ; Also used as a temporary storage register, and sometimes as the return value for subroutines that only need to return a status.
+; 143                     ;0   4
+; 144     0000_0000       S_PIECE	equ	0x6C
+; 145     0000_0000       S_PIECE_FLIP	equ	S_PIECE	; S piece is the same rotated
+; 146                     
+; 147                     ; J piece
+; 148                     ;
+; 149                     ;3   7
+; 150                     ; 0 1
+; 151                     ; 0 1
+; 152                     ; 1 1
+; 153                     ; 0 0
+; 154                     ;0   4
+; 155     0000_0000       J_PIECE	equ	0xE2
+; 156                     
+; 157                     ; J piece flipped
+; 158                     ;
+; 159                     ;3   7
+; 160                     ; 1 1
+; 161                     ; 1 0
+; 162                     ; 1 0
+; 163                     ; 0 0
+; 164                     ;0   4
+; 165     0000_0000       J_PIECE_FLIP	equ	0x8E
+; 166                     
+; 167                     ; Z piece
+; 168                     ;
+; 169                     ;3   7
+; 170                     ; 0 1
+; 171                     ; 1 1
+; 172                     ; 1 0
+; 173                     ; 0 0
+; 174                     ;0   4
+; 175     0000_0000       Z_PIECE	equ	0xC6
+; 176     0000_0000       Z_PIECE_FLIP	equ	Z_PIECE	; Z piece is the same rotated
+; 177                     
+; 178                     ; L piece
+; 179                     ;
+; 180                     ;3   7
+; 181                     ; 1 1
+; 182                     ; 0 1
+; 183                     ; 0 1
+; 184                     ; 0 0
+; 185                     ;0   4
+; 186     0000_0000       L_PIECE	equ	0xE8
 ; 187                     
-; 188     00              	org	0x00
-; 190     00 c810_ff00    tmp	halt
-; 191                     
-; 192                     ; ENTRY POINT
-; 193     01              	org	0x01
-; 196     01 8100_0100    lines_cleared	insn CLRA_INSN	lines_cleared,	0
-; 197     02 8100_0200    piece_kind	insn CLRA_INSN	piece_kind,	0
-; 198     03 8100_0300    piece_rotation	insn CLRA_INSN	piece_rotation,	0
-; 199     04 8100_0400    piece_x	insn CLRA_INSN	piece_x,	0
-; 200     05 8100_0500    piece_y	insn CLRA_INSN	piece_y,	0
-; 201     06 8100_0600    undo_retry_count	insn CLRA_INSN	undo_retry_count,	0
-; 202     07 8100_0700    rendering_off_flag	insn CLRA_INSN	rendering_off_flag,	0
-; 203                     
-; 236                     
-; 237     08 0000_00ff    	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at column -1
-; 238     09 0000_00ff    	insn 0x00000000	,	0xFF
-; 240     0a 8100_0a00    	insn CLRA_INSN	gameboard+0,	0
-; 241     0b 8100_0b00    	insn CLRA_INSN	gameboard+1,	0
-; 242     0c 8100_0c00    	insn CLRA_INSN	gameboard+2,	0
-; 243     0d 8100_0d00    	insn CLRA_INSN	gameboard+3,	0
-; 244     0e 8100_0e00    	insn CLRA_INSN	gameboard+4,	0
-; 245     0f 8100_0f00    	insn CLRA_INSN	gameboard+5,	0
-; 246     10 8100_1000    	insn CLRA_INSN	gameboard+6,	0
-; 247     11 8100_1100    	insn CLRA_INSN	gameboard+7,	0
-; 248     12 8100_1200    	insn CLRA_INSN	gameboard+8,	0
-; 249     13 8100_1300    	insn CLRA_INSN	gameboard+9,	0
-; 250     14 8100_1400    	insn CLRA_INSN	gameboard+10,	0
-; 251     15 8100_1500    	insn CLRA_INSN	gameboard+11,	0
-; 252     16 8100_1600    	insn CLRA_INSN	gameboard+12,	0
-; 253     17 8100_1700    	insn CLRA_INSN	gameboard+13,	0
-; 254     18 8100_1800    	insn CLRA_INSN	gameboard+14,	0
-; 255     19 8100_1900    	insn CLRA_INSN	gameboard+15,	0
-; 256     1a 8100_1a00    	insn CLRA_INSN	gameboard+16,	0
-; 257     1b 8100_1b00    	insn CLRA_INSN	gameboard+17,	0
-; 258     1c 8100_1c00    	insn CLRA_INSN	gameboard+18,	0
-; 259     1d 8100_1d00    	insn CLRA_INSN	gameboard+19,	0
-; 260     1e 0000_00ff    	insn 0x00000000	,	0xFF	; no-op/clc, but specified as custom instruction se we can set B value.
-; 261     1f 0000_00ff    	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at column 11
-; 264     20 8100_2000    stamp_flag	insn CLRA_INSN	stamp_flag,	0
-; 266     21 8100_2100    hard_drop_flag	insn CLRA_INSN	hard_drop_flag,	0
-; 267                     
-; 271                     
-; 275     22 40e0_0602    	insn ALEB_TOC_INSN	#6,	piece_kind	; Set carry if piece_kind >= 6.
-; 276     23 4890_0102    	adcto	#1,	piece_kind	; If carry set, increment by 2, otherwise increment by 1.
-; 277     24 4980_0702    	andto	#0x07,	piece_kind	; Clear all bits above first three so that value wraps.
-; 280     25 8100_2500    prev_piece_rotation	insn CLRA_INSN	prev_piece_rotation,	0
-; 281     26 8100_2600    prev_piece_x	insn CLRA_INSN	prev_piece_x,	0
-; 282     27 8100_2700    prev_piece_y	insn CLRA_INSN	prev_piece_y,	0
-; 288     28 8022_06fd    	incjeq	undo_retry_count,	game_over	; Check if out of undo retries.
-; 293     29 0800_2503    	st	prev_piece_rotation,	piece_rotation
-; 294     2a 0800_2604    	st	prev_piece_x,	piece_x
-; 295     2b 0800_2705    	st	prev_piece_y,	piece_y
-; 321     2c 8100_2c00    	insn CLRA_INSN	piece_stage+0,	0
-; 322     2d 8100_2d00    	insn CLRA_INSN	piece_stage+1,	0
-; 323     2e 8100_2e00    	insn CLRA_INSN	piece_stage+2,	0
-; 324     2f 8100_2f00    	insn CLRA_INSN	piece_stage+3,	0
-; 325     30 8100_3000    	insn CLRA_INSN	piece_stage+4,	0
-; 326     31 8100_3100    	insn CLRA_INSN	piece_stage+5,	0
-; 327     32 8100_3200    	insn CLRA_INSN	piece_stage+6,	0
-; 328     33 8100_3300    	insn CLRA_INSN	piece_stage+7,	0
-; 331     34 8408_936c    	jsr	prep_piece_ret,	prep_piece
-; 334     35 0800_0500    	st	piece_y,	tmp
-; 335     36 8408_a294    	jsr	shift_piece_ret,	shift_piece
-; 342     37 006a_2040    	jne	stamp_flag,	main_full_render	; If stamping, skip collision detection.
-; 345     38 4800_adac    	st	#stamp_piece_coll_op,	stamp_piece_op
-; 346     39 8408_b8a3    	jsr	stamp_piece_ret,	stamp_piece
-; 347     3a 006a_0028    	jne	tmp,	main_undo_then_render	; We have a collision. Undo changes and re-render.
-; 357     3b 0800_0325    	st	piece_rotation,	prev_piece_rotation
-; 358     3c 0800_0426    	st	piece_x,	prev_piece_x
-; 359     3d 0800_0527    	st	piece_y,	prev_piece_y
-; 362     3e 006a_215f    	jne	hard_drop_flag,	main_move_drop	; No hard drop
-; 363     3f 4800_0020    	clr	stamp_flag		; Clear stamp flag
-; 365     40 4800_fe06    	st	#-2,	undo_retry_count	; Reset retry count every time an undo isn't required.
-; 370     41 006a_0748    	jne	rendering_off_flag,	main_stamp_piece_only	; Skip rendering if rendering flag bit 0 is set
-; 371     42 4800_b0ac    main_force_render	st	#stamp_piece_merge_op,	stamp_piece_op
-; 372     43 8408_b8a3    	jsr	stamp_piece_ret,	stamp_piece	; Stamp piece to game board
-; 373     44 8408_ccb9    	jsr	render_board_ret,	render_board	; Print game board to console
-; 374     45 006a_204b    	jne	stamp_flag,	main_clear_lines	; If stamp flag is set, jump to clearing lines and new piece.
-; 375     46 4800_b2ac    	st	#stamp_piece_clear_op,	stamp_piece_op	; Clear piece from game board
-; 376     47 8408_b8a3    	jsr	stamp_piece_ret,	stamp_piece
-; 378     48 0062_204d    	jeq	stamp_flag,	main_stamp_piece_end	; If stamp flag isn't set, skip all stamp actions.
-; 382     49 4800_b0ac    	st	#stamp_piece_merge_op,	stamp_piece_op
-; 383     4a 8408_b8a3    	jsr	stamp_piece_ret,	stamp_piece	; Stamp piece to game board
-; 386     4b 8408_e1cd    	jsr	line_clr_ret,	line_clr
-; 388     4c 4018_ff20    	jmp	main_next_piece		; TODO: Print character here to indicate new piece? 'P'?
-; 390                     
-; 395     4d e800_0000    	inwait	tmp
-; 396     4e 4980_0f00    	andto	#0x0F,	tmp	; Clear upper bits to allow compatibility with ASCII inputs
-; 397     4f 0860_0000    	neg	tmp		; Invert tmp so we can incjeq
-; 402     50 0062_0042    	jeq	tmp,	main_force_render
-; 406     51 4880_0100    	inc	tmp
-; 407     52 8022_005f    	incjeq	tmp,	main_move_drop
-; 411     53 4880_0100    	inc	tmp
-; 412     54 8022_0065    	incjeq	tmp,	main_move_left
-; 416     55 4880_0100    	inc	tmp
-; 417     56 8022_0066    	incjeq	tmp,	main_move_right
-; 421     57 8022_0068    	incjeq	tmp,	main_rot_left
-; 425     58 8022_0069    	incjeq	tmp,	main_hard_drop
-; 429     59 8022_0067    	incjeq	tmp,	main_rot_right
-; 433     5a 8022_006a    	incjeq	tmp,	main_enable_rendering
-; 437     5b 8022_006b    	incjeq	tmp,	main_disable_rendering
-; 441     5c 8022_0001    	incjeq	tmp,	main
-; 445     5d 8022_00fd    	incjeq	tmp,	game_over
-; 446                     
-; 448     5e d808_3f4d    	insn OUTC_JMP_INSN	#0x3F,	main_read_input	; Print '?'
-; 451     5f 48e0_0105    	dec	piece_y
-; 452     60 4800_ff00    	st	#-1,	tmp
-; 453     61 8408_a294    	jsr	shift_piece_ret,	shift_piece
-; 454     62 0062_0064    	jeq	tmp,	main_move_drop_2	; Check collision with floor
-; 457     63 8028_2040    	insn INCJMP_INSN	stamp_flag,	main_full_render	; Re-render board and restart game loop.
-; 458     64 8028_2038    main_move_drop_2	insn INCJMP_INSN	stamp_flag,	main_check_collision	; Set stamp flag and check collision
-; 459                     
-; 461     65 48e0_0204    	rsbto	#2,	piece_x
-; 463     66 8028_0438    	insn INCJMP_INSN	piece_x,	main_check_collision
-; 465     67 48e0_0203    	rsbto	#2,	piece_rotation
-; 467     68 8028_032c    	insn INCJMP_INSN	piece_rotation,	main_render_fresh_piece
-; 469     69 8028_215f    	insn INCJMP_INSN	hard_drop_flag,	main_move_drop	; TODO: LSROJMP instead, so that it can never wrap around even after 255 iterations
-; 471     6a 8108_074d    	insn CLRJMP_INSN	rendering_off_flag,	main_read_input
-; 473     6b 8028_074d    	insn INCJMP_INSN	rendering_off_flag,	main_read_input	; TODO: LSROJMP instead, so that it can never wrap around even after 255
-; 475                     
-; 476                     ; Prepare piece stage subroutine
-; 477                     ; piece_kind = which piece to render. {0,1,2,3,4,5,6}
-; 478                     ;
-; 479                     ; Piece rotation. 4 different values for each direction. {0,1,2,3}. Only uses bottom two bits, so can increment forever.
-; 480                     ;
-; 485     6c 4800_7271    	st	#prep_piece_jmp,	prep_piece_target
-; 486     6d 0a00_0300    	lsrto	piece_rotation,	tmp
-; 487     6e 0a00_0000    	lsr	tmp		; Get the second bit from prep_piece_rot into carry flag
-; 488     6f 0890_0271    	adcto	piece_kind,	prep_piece_target	; Add the carry into prep_piece_target
-; 489     70 0880_0271    	addto	piece_kind,	prep_piece_target
-; 491     71 4018_ff00    prep_piece_target	jmp	0
-; 493     72 4808_6680    	insn ST_JMP_INSN	#O_PIECE,	prep_piece_value
-; 494     73 4808_6680    	insn ST_JMP_INSN	#O_PIECE_FLIP,	prep_piece_value
-; 495     74 4808_f080    	insn ST_JMP_INSN	#I_PIECE,	prep_piece_value
-; 496     75 4808_f080    	insn ST_JMP_INSN	#I_PIECE_FLIP,	prep_piece_value
-; 497     76 4808_2780    	insn ST_JMP_INSN	#T_PIECE,	prep_piece_value
-; 498     77 4808_7280    	insn ST_JMP_INSN	#T_PIECE_FLIP,	prep_piece_value
-; 499     78 4808_3680    	insn ST_JMP_INSN	#S_PIECE,	prep_piece_value
-; 500     79 4808_3680    	insn ST_JMP_INSN	#S_PIECE_FLIP,	prep_piece_value
-; 501     7a 4808_6380    	insn ST_JMP_INSN	#Z_PIECE,	prep_piece_value
-; 502     7b 4808_6380    	insn ST_JMP_INSN	#Z_PIECE_FLIP,	prep_piece_value
-; 503     7c 4808_7180    	insn ST_JMP_INSN	#J_PIECE,	prep_piece_value
-; 504     7d 4808_4780    	insn ST_JMP_INSN	#J_PIECE_FLIP,	prep_piece_value
-; 505     7e 4808_1780    	insn ST_JMP_INSN	#L_PIECE,	prep_piece_value
-; 506     7f 4808_7480    	insn ST_JMP_INSN	#L_PIECE_FLIP,	prep_piece_value
-; 507     80 4010_ff00    prep_piece_value	nop	; prep_piece_value stores the jump table result.
-; 508                     
-; 510     81 0202_0389    	jo	piece_rotation,	prep_piece_hor
-; 512     82 0800_8031    	st	prep_piece_value,	piece_stage+5
-; 513     83 4980_f031    	andto	#0xF0,	piece_stage+5	; Clear lower 4 bits
-; 514     84 4800_fc00    	st	#-4,	tmp
-; 515     85 0880_8080    prep_piece_vert_loop	lsl	prep_piece_value
-; 516     86 802a_0085    	incjne	tmp,	prep_piece_vert_loop
-; 517     87 0800_802f    	st	prep_piece_value,	piece_stage+3
-; 518     88 4018_ff93    	jmp	prep_piece_ret
-; 520     0000_0089       prep_piece_hor_i	equ	prep_piece_target		; Reuse prep_piece_target as the outer loop variable.
-; 521     89 4800_fd71    	st	#-3,	prep_piece_hor_i
-; 523     8a 4800_338c    	st	#(piece_stage+7),	prep_piece_hor_ptr
-; 525     8b 0800_8c8e    	st	prep_piece_hor_ptr,	prep_piece_hor_wb_ptr
-; 526     8c c080_0000    prep_piece_hor_ptr	insn IMADD_INSN	tmp,	0	; LOAD
-; 527     8d 0a00_8080    	lsr	prep_piece_value
-; 528     8e 0a10_0000    prep_piece_hor_wb_ptr	rorto	tmp,	0	; STORE
-; 529     8f 48e0_028c    	rsbto	#2,	prep_piece_hor_ptr
-; 530     90 40e0_2c8c    	insn ALEB_TOC_INSN	#piece_stage,	prep_piece_hor_ptr
-; 531     91 006c_008b    	jcs	prep_piece_hor_loop_b		; Loop if #piece_stage <= prep_piece_hor_ptr
-; 532     92 802a_718a    	incjne	prep_piece_hor_i,	prep_piece_hor_loop_a
-; 533     93 4018_ff00    prep_piece_ret	jmp	0
-; 534                     
-; 535                     ; shift_piece subroutine.
-; 536                     ;
-; 537                     ; Shifts the piece stage downwards by the set amount stored negated in tmp.
-; 538                     ; If the piece is shifted to the bottom of the board, stops and returns non-zero in tmp.
-; 540     94 0062_00a2    	jeq	tmp,	shift_piece_ret
-; 542     95 0202_32a2    	jo	piece_stage+6,	shift_piece_ret
-; 543     96 0202_30a2    	jo	piece_stage+4,	shift_piece_ret
-; 544     97 0202_2ea2    	jo	piece_stage+2,	shift_piece_ret
-; 545     98 0202_2ca2    	jo	piece_stage+0,	shift_piece_ret
-; 547     99 0a00_3333    	lsr	piece_stage+7
-; 548     9a 0a10_3232    	ror	piece_stage+6
-; 549     9b 0a00_3131    	lsr	piece_stage+5
-; 550     9c 0a10_3030    	ror	piece_stage+4
-; 551     9d 0a00_2f2f    	lsr	piece_stage+3
-; 552     9e 0a10_2e2e    	ror	piece_stage+2
-; 553     9f 0a00_2d2d    	lsr	piece_stage+1
-; 554     a0 0a10_2c2c    	ror	piece_stage+0
-; 555     a1 802a_0095    	incjne	tmp,	shift_piece_loop
-; 556     a2 4018_ff00    shift_piece_ret	jmp	0	; Return from subroutine
-; 557                     
-; 558                     ; stamp_piece: Stamp piece board subroutine.
-; 559                     ;
-; 560                     ; This subroutine handles several functions:
-; 561                     ;
-; 562                     ; * ADDing the piece_stage to the gameboard (Stamping the piece down)
-; 563                     ; * BICing the piece_stage to the gameboard (Clearing the piece off)
-; 564                     ; * Checking for any common bits (AND result > 0) between piece_stage and gameboard (Checking for collision).
-; 565                     ;
-; 566                     ; stamp_piece_op must be set to #stamp_piece_coll_op, #stamp_piece_merge_op, or #stamp_piece_clear_op before executing.
-; 567                     ;
-; 568                     ; When executing stamp_piece_coll_op, tmp will be non-zero if a collision occured.
-; 569                     ;
-; 572     a3 4800_2ca9    	st	#piece_stage,	stamp_piece_ps_ptr
-; 573     a4 4800_10ab    	st	#(gameboard+(PIECE_X_OFFSET*2)),	stamp_piece_gb_ptr
-; 574     a5 0880_04ab    	addto	piece_x,	stamp_piece_gb_ptr
-; 575     a6 0880_04ab    	addto	piece_x,	stamp_piece_gb_ptr	; stamp_piece_gb_ptr = #gameboard + 2 * piece_x
-; 578     a7 4800_f800    	st	#-PIECE_STAGE_SIZE,	tmp
-; 580                     
-; 581     a8 8100_a800    stamp_piece_ps_val	insn CLRA_INSN	stamp_piece_ps_val,	0	; Self clearing variable stamp_piece_ps_val
-; 582     a9 8080_a800    stamp_piece_ps_ptr	add	stamp_piece_ps_val,	0	; Piece stage LOAD
-; 584     aa 8100_aa00    stamp_piece_gb_val	insn CLRA_INSN	stamp_piece_gb_val,	0	; Self clearing variable stamp_piece_gb_val
-; 585     ab 8080_aa00    stamp_piece_gb_ptr	add	stamp_piece_gb_val,	0	; Game board LOAD
-; 586                     
-; 588     ac 4018_ff00    stamp_piece_op	jmp	0	; This is set before calling the subroutine
-; 591     ad 0980_a8aa    	andto	stamp_piece_ps_val,	stamp_piece_gb_val
-; 592     ae 0062_aab5    	jeq	stamp_piece_gb_val,	stamp_piece_loop_end	; If collision didn't occur, keep looping.
-; 595     af 4018_ffb8    	jmp	stamp_piece_ret		; Break out of loop and exit
-; 599     b0 0880_a8aa    	addto	stamp_piece_ps_val,	stamp_piece_gb_val
-; 600     b1 4018_ffb3    	jmp	stamp_piece_writeback
-; 602     b2 09c0_a8aa    	bicto	stamp_piece_ps_val,	stamp_piece_gb_val
-; 604     b3 0800_abb4    	st	stamp_piece_gb_ptr,	stamp_piece_gb_wb_ptr
-; 605     b4 0800_aa00    stamp_piece_gb_wb_ptr	st	stamp_piece_gb_val,	0	; Game board STORE
-; 608     b5 8020_a900    rem_bits_mask	insn INCA_INSN	stamp_piece_ps_ptr,	0	; Variable storage for rem_bits_mask, in rem_bits
-; 609     b6 8020_ab00    	insn INCA_INSN	stamp_piece_gb_ptr,	0
-; 610     b7 802a_00a8    	incjne	tmp,	stamp_piece_loop
-; 611     b8 4018_ff00    stamp_piece_ret	jmp	0	; Return from subroutine
-; 612                     
-; 613                     ; render_board: Render board subroutine
-; 614                     ;
-; 615                     ; How:
-; 616                     ; Render the gameboard from left to right, top to bottom, to give the most simple console output (avoids ANSI console cursor movement).
-; 617                     ;
-; 618                     ; LOOP A: Starts at top of the board and then switches to bottom half of the board. The gameboard ptr offset changes from 1 to 0. (or 2 -> 1 -> 0 if using a bigger game board)
-; 619                     ; LOOP B: Work down the rows using a single byte bitmask, shifting it right each iteration.
-; 620                     ; LOOP C: Work along the columns from 0 to 10, incrementing the gameboard ptr by 2 each iteration.
-; 621                     ;         Decide whether to render a block or empty character by ANDing the gameboard ptr value with the current bitmask
-; 622                     ;
-; 624     b9 d800_0d00    get_full_lines_mask	outc	#CR_CHAR		; get_full_lines_mask: variable for get_full_lines
-; 625     ba d800_0a00    	outc	#LF_CHAR
+; 188                     ; L piece flipped
+; 189                     ;
+; 190                     ;3   7
+; 191                     ; 1 0
+; 192                     ; 1 0
+; 193                     ; 1 1
+; 194                     ; 0 0
+; 195                     ;0   4
+; 196     0000_0000       L_PIECE_FLIP	equ	0x2E
+; 197                     
+; 198                     ; ================
+; 199                     ; Application code
+; 200                     ; ================
+; 201                     
+; 202                     ; Temporary variable tmp at address 0x00.
+; 203                     ;
+; 204                     ; Used as a halt catch for any jumps to null (0x00). This usually indicates a subroutine hasn't had its return address set.
+; 205                     ; Also used as a temporary storage register, and sometimes as the return value for subroutines that only need to return a status.
+; 206                     
+; 207     00              	org	0x00
+; 209     00 c810_ff00    tmp	halt
+; 210                     
+; 211                     ; -----------
+; 212                     ; ENTRY POINT
+; 213                     ; -----------
+; 214     01              	org	0x01
+; 216                     ; --------------------------
+; 217                     ; new_game: Start a new game
+; 218                     ; --------------------------
+; 221     01 8100_0100    lines_cleared	insn CLRA_INSN	lines_cleared,	0
+; 222     02 8100_0200    rendering_off_flag	insn CLRA_INSN	rendering_off_flag,	0
+; 223     03 8100_0300    piece_kind	insn CLRA_INSN	piece_kind,	0
+; 224     04 8100_0400    piece_rotation	insn CLRA_INSN	piece_rotation,	0
+; 225     05 8100_0500    piece_x	insn CLRA_INSN	piece_x,	0
+; 226     06 8100_0600    piece_y	insn CLRA_INSN	piece_y,	0
+; 227     07 8100_0700    undo_retry_count	insn CLRA_INSN	undo_retry_count,	0
+; 228                     
+; 261                     
+; 262     08 0000_00ff    	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at column -1
+; 263     09 0000_00ff    	insn 0x00000000	,	0xFF
+; 265     0a 8100_0a00    	insn CLRA_INSN	gameboard+0,	0
+; 266     0b 8100_0b00    	insn CLRA_INSN	gameboard+1,	0
+; 267     0c 8100_0c00    	insn CLRA_INSN	gameboard+2,	0
+; 268     0d 8100_0d00    	insn CLRA_INSN	gameboard+3,	0
+; 269     0e 8100_0e00    	insn CLRA_INSN	gameboard+4,	0
+; 270     0f 8100_0f00    	insn CLRA_INSN	gameboard+5,	0
+; 271     10 8100_1000    	insn CLRA_INSN	gameboard+6,	0
+; 272     11 8100_1100    	insn CLRA_INSN	gameboard+7,	0
+; 273     12 8100_1200    	insn CLRA_INSN	gameboard+8,	0
+; 274     13 8100_1300    	insn CLRA_INSN	gameboard+9,	0
+; 275     14 8100_1400    	insn CLRA_INSN	gameboard+10,	0
+; 276     15 8100_1500    	insn CLRA_INSN	gameboard+11,	0
+; 277     16 8100_1600    	insn CLRA_INSN	gameboard+12,	0
+; 278     17 8100_1700    	insn CLRA_INSN	gameboard+13,	0
+; 279     18 8100_1800    	insn CLRA_INSN	gameboard+14,	0
+; 280     19 8100_1900    	insn CLRA_INSN	gameboard+15,	0
+; 281     1a 8100_1a00    	insn CLRA_INSN	gameboard+16,	0
+; 282     1b 8100_1b00    	insn CLRA_INSN	gameboard+17,	0
+; 283     1c 8100_1c00    	insn CLRA_INSN	gameboard+18,	0
+; 284     1d 8100_1d00    	insn CLRA_INSN	gameboard+19,	0
+; 285     1e 0000_00ff    	insn 0x00000000	,	0xFF	; A wall for the gameboard to provide collisions at column 11
+; 286     1f 0000_00ff    	insn 0x00000000	,	0xFF
+; 289     20 8100_2000    stamp_flag	insn CLRA_INSN	stamp_flag,	0
+; 291     21 8100_2100    hard_drop_flag	insn CLRA_INSN	hard_drop_flag,	0
+; 292                     
+; 296                     
+; 300     22 40e0_0603    	insn ALEB_TOC_INSN	#6,	piece_kind	; Set carry if piece_kind >= 6.
+; 301     23 4890_0103    	adcto	#1,	piece_kind	; If carry set, increment by 2, otherwise increment by 1.
+; 302     24 4980_0703    	andto	#0x07,	piece_kind	; Clear all bits above first three so that value wraps.
+; 305     25 8100_2500    prev_piece_rotation	insn CLRA_INSN	prev_piece_rotation,	0
+; 306     26 8100_2600    prev_piece_x	insn CLRA_INSN	prev_piece_x,	0
+; 307     27 8100_2700    prev_piece_y	insn CLRA_INSN	prev_piece_y,	0
+; 313     28 8022_07fe    	incjeq	undo_retry_count,	game_over	; Check if out of undo retries.
+; 318     29 0800_2504    	st	prev_piece_rotation,	piece_rotation
+; 319     2a 0800_2605    	st	prev_piece_x,	piece_x
+; 320     2b 0800_2706    	st	prev_piece_y,	piece_y
+; 346     2c 8100_2c00    	insn CLRA_INSN	piece_stage+0,	0
+; 347     2d 8100_2d00    	insn CLRA_INSN	piece_stage+1,	0
+; 348     2e 8100_2e00    	insn CLRA_INSN	piece_stage+2,	0
+; 349     2f 8100_2f00    	insn CLRA_INSN	piece_stage+3,	0
+; 350     30 8100_3000    	insn CLRA_INSN	piece_stage+4,	0
+; 351     31 8100_3100    	insn CLRA_INSN	piece_stage+5,	0
+; 352     32 8100_3200    	insn CLRA_INSN	piece_stage+6,	0
+; 353     33 8100_3300    	insn CLRA_INSN	piece_stage+7,	0
+; 356     34 8408_986c    	jsr	prep_piece_ret,	prep_piece
+; 359     35 0800_0600    	st	piece_y,	tmp
+; 360     36 8408_a799    	jsr	shift_piece_ret,	shift_piece
+; 368     37 006a_2040    	jne	stamp_flag,	main_full_render	; If stamping, skip collision detection.
+; 371     38 4800_b2b1    	st	#stamp_piece_coll_op,	stamp_piece_op
+; 372     39 8408_bda8    	jsr	stamp_piece_ret,	stamp_piece
+; 373     3a 006a_0028    	jne	tmp,	main_undo_then_render	; We have a collision. Undo changes and re-render.
+; 383     3b 0800_0425    	st	piece_rotation,	prev_piece_rotation
+; 384     3c 0800_0526    	st	piece_x,	prev_piece_x
+; 385     3d 0800_0627    	st	piece_y,	prev_piece_y
+; 388     3e 006a_215f    	jne	hard_drop_flag,	main_move_drop	; No hard drop
+; 389     3f 4800_0020    	clr	stamp_flag		; Clear stamp flag
+; 391     40 4800_fe07    	st	#-2,	undo_retry_count	; Reset retry count every time an undo isn't required.
+; 396     41 006a_0248    	jne	rendering_off_flag,	main_stamp_piece_only	; Skip rendering if rendering flag bit 0 is set
+; 397     42 4800_b5b1    main_force_render	st	#stamp_piece_merge_op,	stamp_piece_op
+; 398     43 8408_bda8    	jsr	stamp_piece_ret,	stamp_piece	; Stamp piece to game board
+; 399     44 8408_d1be    	jsr	render_board_ret,	render_board	; Print game board to console
+; 400     45 006a_204b    	jne	stamp_flag,	main_clear_lines	; If stamp flag is set, jump to clearing lines and new piece.
+; 401     46 4800_b7b1    	st	#stamp_piece_clear_op,	stamp_piece_op	; Clear piece from game board
+; 402     47 8408_bda8    	jsr	stamp_piece_ret,	stamp_piece
+; 404     48 0062_204d    	jeq	stamp_flag,	main_stamp_piece_end	; If stamp flag isn't set, skip all stamp actions.
+; 408     49 4800_b5b1    	st	#stamp_piece_merge_op,	stamp_piece_op
+; 409     4a 8408_bda8    	jsr	stamp_piece_ret,	stamp_piece	; Stamp piece to game board
+; 412     4b 8408_fdd2    	jsr	line_clr_ret,	line_clr
+; 414     4c 4018_ff20    	jmp	main_next_piece		; TODO: Print character here to indicate new piece? 'P'?
+; 416                     
+; 421     4d e800_0000    	inwait	tmp
+; 422     4e 4980_0f00    	andto	#0x0F,	tmp	; Clear upper bits to allow compatibility with ASCII inputs
+; 423     4f 0860_0000    	neg	tmp		; Invert tmp so we can incjeq
+; 428     50 0062_0042    	jeq	tmp,	main_force_render
+; 432     51 4880_0100    	inc	tmp
+; 433     52 8022_005f    	incjeq	tmp,	main_move_drop
+; 437     53 4880_0100    	inc	tmp
+; 438     54 8022_0065    	incjeq	tmp,	main_move_left
+; 442     55 4880_0100    	inc	tmp
+; 443     56 8022_0066    	incjeq	tmp,	main_move_right
+; 447     57 8022_0067    	incjeq	tmp,	main_rot_left
+; 451     58 8022_0069    	incjeq	tmp,	main_hard_drop
+; 455     59 8022_0068    	incjeq	tmp,	main_rot_right
+; 459     5a 8022_006a    	incjeq	tmp,	main_enable_rendering
+; 463     5b 8022_006b    	incjeq	tmp,	main_disable_rendering
+; 467     5c 8022_0001    	incjeq	tmp,	new_game
+; 471     5d 8022_00fe    	incjeq	tmp,	game_over
+; 472                     
+; 474     5e d808_3f4d    	insn OUTC_JMP_INSN	#0x3F,	main_read_input	; Print '?'
+; 477     5f 48e0_0106    	dec	piece_y
+; 478     60 4800_ff00    	st	#-1,	tmp
+; 479     61 8408_a799    	jsr	shift_piece_ret,	shift_piece
+; 480     62 0062_0064    	jeq	tmp,	main_move_drop_2	; Check collision with floor
+; 483     63 8028_2040    	insn INC_JMP_INSN	stamp_flag,	main_full_render	; Re-render board and restart game loop.
+; 484     64 8028_2038    main_move_drop_2	insn INC_JMP_INSN	stamp_flag,	main_check_collision	; Set stamp flag and check collision
+; 485                     
+; 487     65 48e0_0205    	rsbto	#2,	piece_x
+; 489     66 8028_0538    	insn INC_JMP_INSN	piece_x,	main_check_collision
+; 491     67 48e0_0204    	rsbto	#2,	piece_rotation
+; 493     68 8028_042c    	insn INC_JMP_INSN	piece_rotation,	main_render_fresh_piece
+; 495     69 8228_215f    	insn LSRO_JMP_INSN	hard_drop_flag,	main_move_drop
+; 497     6a 8108_024d    	insn CLR_JMP_INSN	rendering_off_flag,	main_read_input
+; 499     6b 8228_024d    	insn LSRO_JMP_INSN	rendering_off_flag,	main_read_input
+; 501                     
+; 502                     ; ------------------------------------------------
+; 503                     ; prep_piece: Render a piece into the piece stage.
+; 504                     ; ------------------------------------------------
+; 505                     ;
+; 506                     ; piece_kind = which piece to render. {0,1,2,3,4,5,6}.
+; 507                     ; piece_rotation = which orientation to render. {0,1,2,3}. Only considers bottom two bits, so piece_rotation can be incremented forever.
+; 508                     ;
+; 510     0000_006c       prep_piece_is_flipped	equ	prep_piece_hor_ptr	 ; Reuse prep_piece_hor_ptr as a temp variable since we don't need it until later.
+; 511                     
+; 512     6c 0800_0371    	st	piece_kind,	prep_piece_target
+; 513     6d 0a00_0491    	lsrto	piece_rotation,	prep_piece_is_flipped	; prep_piece_is_flipped.0 = piece_rotation.1
+; 514     6e 0200_9100    	insn OTOC_INSN	prep_piece_is_flipped		; If piece is flipped, set carry.
+; 515     6f 0890_0371    	adcto	piece_kind,	prep_piece_target	; Add piece_kind + carry into prep_piece_target.
+; 516     70 4880_7271    	addto	#prep_piece_jmp,	prep_piece_target	; Offset target into jump table.
+; 518     71 4018_ff00    prep_piece_target	jmp	0	; prep_piece_target = #prep_piece_jmp + (2 * piece_kind) + piece_rotation.1
+; 520     72 4808_f080    	insn ST_JMP_INSN	#I_PIECE,	prep_piece_value
+; 521     73 4808_0f80    	insn ST_JMP_INSN	#I_PIECE_FLIP,	prep_piece_value
+; 522     74 4808_cc80    	insn ST_JMP_INSN	#O_PIECE,	prep_piece_value
+; 523     75 4808_cc80    	insn ST_JMP_INSN	#O_PIECE_FLIP,	prep_piece_value
+; 524     76 4808_e480    	insn ST_JMP_INSN	#T_PIECE,	prep_piece_value
+; 525     77 4808_4e80    	insn ST_JMP_INSN	#T_PIECE_FLIP,	prep_piece_value
+; 526     78 4808_6c80    	insn ST_JMP_INSN	#S_PIECE,	prep_piece_value
+; 527     79 4808_6c80    	insn ST_JMP_INSN	#S_PIECE_FLIP,	prep_piece_value
+; 528     7a 4808_e280    	insn ST_JMP_INSN	#J_PIECE,	prep_piece_value
+; 529     7b 4808_8e80    	insn ST_JMP_INSN	#J_PIECE_FLIP,	prep_piece_value
+; 530     7c 4808_c680    	insn ST_JMP_INSN	#Z_PIECE,	prep_piece_value
+; 531     7d 4808_c680    	insn ST_JMP_INSN	#Z_PIECE_FLIP,	prep_piece_value
+; 532     7e 4808_e880    	insn ST_JMP_INSN	#L_PIECE,	prep_piece_value
+; 533     7f 4808_2e80    	insn ST_JMP_INSN	#L_PIECE_FLIP,	prep_piece_value
+; 534     80 4010_ff00    prep_piece_value	nop	; prep_piece_value stores the jump table result.
+; 535                     
+; 537     81 020a_048d    	je	piece_rotation,	prep_piece_hor	; Piece renders horizontally initially, then rotates vertically.
+; 539     82 0800_802f    	st	prep_piece_value,	piece_stage+3
+; 540     83 4980_f02f    	andto	#0xF0,	piece_stage+3	; Clear lower 4 bits
+; 541     84 4800_fc00    	st	#-4,	tmp
+; 542     85 0880_8080    prep_piece_vert_loop	lsl	prep_piece_value
+; 543     86 802a_0085    	incjne	tmp,	prep_piece_vert_loop
+; 544     87 0800_802d    	st	prep_piece_value,	piece_stage+1
+; 547     88 0202_0398    	jo	piece_kind,	prep_piece_ret	; If odd piece kind, no adjustment required.
+; 548     89 020a_9198    	je	prep_piece_is_flipped,	prep_piece_ret	; If not flipped, no adjustment required.
+; 549     8a 0800_2f31    	st	piece_stage+3,	piece_stage+5
+; 550     8b 0800_2d2f    	st	piece_stage+1,	piece_stage+3
+; 551     8c 8108_2d98    	insn CLR_JMP_INSN	piece_stage+1,	prep_piece_ret
+; 553     0000_008d       prep_piece_hor_i	equ	prep_piece_target		; Reuse prep_piece_target as the outer loop variable.
+; 554                     
+; 559     8d 0202_038f    	jo	piece_kind,	prep_piece_hor_inel	; Note: Carry is set when jumping
+; 560     8e 0200_9100    	insn OTOC_INSN	prep_piece_is_flipped
+; 561     8f 4810_fd71    prep_piece_hor_inel	insn STC_INSN	#-3,	prep_piece_hor_i	; ; Store + carry. stc?
+; 563     90 4800_3391    	st	#(piece_stage+7),	prep_piece_hor_ptr
+; 565     91 c080_0000    prep_piece_hor_ptr	insn IMADD_INSN	tmp,	0	; LOAD
+; 566     92 0800_9194    	st	prep_piece_hor_ptr,	prep_piece_hor_wb_ptr
+; 567     93 0a00_8080    	lsr	prep_piece_value
+; 568     94 0a10_0000    prep_piece_hor_wb_ptr	rorto	tmp,	0	; STORE
+; 569     95 48e0_0291    	rsbto	#2,	prep_piece_hor_ptr
+; 573     96 40e2_2c91    	insn 0x00E20000	#piece_stage,	prep_piece_hor_ptr	; If #aa <= [bb], jump to bb.
+; 574     97 802a_7190    	incjne	prep_piece_hor_i,	prep_piece_hor_loop_a
+; 575     98 4018_ff00    prep_piece_ret	jmp	0
+; 576                     
+; 577                     ; -------------------------------------------------------------------
+; 578                     ; shift_piece: Shifts the gameboard downwards by the specified amount
+; 579                     ; -------------------------------------------------------------------
+; 580                     ;
+; 581                     ; Shifts the piece stage downwards by the set amount stored negated in tmp.
+; 582                     ; If the piece is shifted to the bottom of the board, stops and returns non-zero in tmp.
+; 584     99 0062_00a7    	jeq	tmp,	shift_piece_ret
+; 586     9a 0202_32a7    	jo	piece_stage+6,	shift_piece_ret
+; 587     9b 0202_30a7    	jo	piece_stage+4,	shift_piece_ret
+; 588     9c 0202_2ea7    	jo	piece_stage+2,	shift_piece_ret
+; 589     9d 0202_2ca7    	jo	piece_stage+0,	shift_piece_ret
+; 591     9e 0a00_3333    	lsr	piece_stage+7
+; 592     9f 0a10_3232    	ror	piece_stage+6
+; 593     a0 0a00_3131    	lsr	piece_stage+5
+; 594     a1 0a10_3030    	ror	piece_stage+4
+; 595     a2 0a00_2f2f    	lsr	piece_stage+3
+; 596     a3 0a10_2e2e    	ror	piece_stage+2
+; 597     a4 0a00_2d2d    	lsr	piece_stage+1
+; 598     a5 0a10_2c2c    	ror	piece_stage+0
+; 599     a6 802a_009a    	incjne	tmp,	shift_piece_loop
+; 600     a7 4018_ff00    shift_piece_ret	jmp	0	; Return from subroutine
+; 601                     
+; 602                     ; -----------------------------------------------------------------------------
+; 603                     ; stamp_piece: Performs an operation between the piece stage and the gameboard.
+; 604                     ; -----------------------------------------------------------------------------
+; 605                     ;
+; 606                     ; This subroutine handles several operations:
+; 607                     ;
+; 608                     ; * ADDing the piece_stage to the gameboard (Stamping the piece down)
+; 609                     ; * BICing the piece_stage to the gameboard (Clearing the piece off)
+; 610                     ; * Checking for any common bits (AND result > 0) between piece_stage and gameboard (Checking for collision).
+; 611                     ;
+; 612                     ; stamp_piece_op must be set to #stamp_piece_coll_op, #stamp_piece_merge_op, or #stamp_piece_clear_op before executing.
+; 613                     ;
+; 614                     ; When executing stamp_piece_coll_op, tmp will be non-zero if a collision occured.
+; 615                     ;
+; 618     a8 4800_2cae    	st	#piece_stage,	stamp_piece_ps_ptr
+; 619     a9 4800_12b0    	st	#(gameboard+(PIECE_X_OFFSET*2)),	stamp_piece_gb_ptr
+; 620     aa 0880_05b0    	addto	piece_x,	stamp_piece_gb_ptr
+; 621     ab 0880_05b0    	addto	piece_x,	stamp_piece_gb_ptr	; stamp_piece_gb_ptr = #gameboard + 2 * piece_x
+; 624     ac 4800_f800    	st	#-PIECE_STAGE_SIZE,	tmp
 ; 626                     
-; 627     bb 4800_01c0    	st	#(GAMEBOARD_STRIDE-1),	render_board_ptr	; Start the render_board_ptr with an offset of 1 to render the top half of the board.
-; 628                     ; LOOP A
-; 630     bc 4880_0ac0    	addto	#gameboard,	render_board_ptr	; Adjust the render_board_ptr to point into the gameboard. TODO: Move out of loop after implementing ALEB_TOC_INSN below since this won't be changed.
-; 631     bd 4800_80c7    	st	#%1000_0000,	render_board_mask	; Initialize the bitmask for testing the column byte for which row is set
-; 632                     ; LOOP B
-; 634     be 4800_f6c8    	st	#(-GAMEBOARD_COLS),	render_board_col	; Prepare column loop counter
-; 635                     ; LOOP C
-; 637     bf 0800_c700    	st	render_board_mask,	tmp
-; 638     c0 8180_0000    render_board_ptr	insn AND_INSN	tmp,	0	; Indirect AND, store result in tmp
-; 641     c1 006a_00c3    	jne	tmp,	render_board_print_a
-; 642     c2 d808_7ec4    	insn OUTC_JMP_INSN	#EMPTY_CHAR,	render_board_print_b	; Print empty char and jump over the block char print
-; 644     c3 d800_2300    line_clr_i	outc	#BLOCK_CHAR		; Used as variable storage for line_clr_i in line_clr
-; 646     c4 4880_02c0    	addto	#GAMEBOARD_STRIDE,	render_board_ptr	; Move onto next column byte
-; 647     c5 802a_c8bf    	incjne	render_board_col,	render_board_loop_c	; If we still have columns to render, continue LOOP C
-; 648                     ; END LOOP C
-; 649     c6 48e0_14c0    	rsbto	#GAMEBOARD_SIZE,	render_board_ptr	; Reset render_board_ptr to pre-loop state
-; 653     c7 d800_0d00    render_board_mask	outc	#CR_CHAR		; render_board_mask: The row bitmask for selecting the row to render
-; 654     c8 d800_0a00    render_board_col	outc	#LF_CHAR		; render_board_col: The current column iteration loop counter.
-; 655                     
-; 658     c9 820a_c7be    	insn LSR_JCC_INSN	render_board_mask,	render_board_loop_b
-; 659                     ; END LOOP B
-; 662     ca 48e0_0bc0    	rsbto	#(gameboard+1),	render_board_ptr	; TODO: Can replace with ALEB_TOC_INSN + jcs
-; 664     cb 0069_c0bc    	jge	render_board_ptr,	render_board_loop_a	; Otherwise continue LOOP A.
-; 665                     ; END LOOP A
-; 666     cc 4018_ff00    render_board_ret	jmp	0		; Return from subroutine.
-; 667                     
-; 668                     ; line_clr: Clears all full rows from the gameboard.
-; 669                     ;
-; 670                     ; How:
-; 671                     ; 1. Call get_full_lines to generate a bitmask of all the complete rows
-; 672                     ; 2. Call rem_bits on each column in the gameboard with a copy of the complete rows bitmask.
-; 673                     ; 3. Copy the result back over the gameboard.
-; 674                     ;
-; 677     cd 8408_ebe2    	jsr	get_full_lines_ret,	get_full_lines
-; 678                     
-; 680     ce 006a_b9d1    	jne	get_full_lines_mask+0,	line_clr_do_remove
-; 681     cf 006a_bad1    	jne	get_full_lines_mask+1,	line_clr_do_remove
-; 682     d0 4018_ffe1    	jmp	line_clr_ret	; Fastpath to returning from the subroutine
-; 685     d1 8100_d100    rem_bits_value	insn CLRA_INSN	rem_bits_value+0,	0	; rem_bits_value: 2 bytes. Variable storage for rem_bits.
-; 686     d2 8100_d200    	insn CLRA_INSN	rem_bits_value+1,	0	; Self clearing.
-; 687                     
-; 689     d3 4800_f6c3    	st	#(-GAMEBOARD_COLS),	line_clr_i	; Prep the loop counter
-; 690                     
-; 692     d4 4800_0ad8    	st	#gameboard,	line_clr_read_ptr_0
-; 694                     
-; 695                     ; Line clear loop. It will call rem_bits with the line clear mask and each column of the gameboard.
-; 699     d5 0800_b9b5    	st	get_full_lines_mask+0,	rem_bits_mask+0	; Prep mask +0
-; 700     d6 0800_bab6    	st	get_full_lines_mask+1,	rem_bits_mask+1	; Prep mask +1
-; 701                     
-; 703     d7 0820_d8d9    	insn INCTO_INSN	line_clr_read_ptr_0,	line_clr_read_ptr_1	; Prep ptr +1
-; 705     d8 8080_d100    line_clr_read_ptr_0	add	rem_bits_value+0,	0	; Load +0
-; 706     d9 8080_d200    line_clr_read_ptr_1	add	rem_bits_value+1,	0	; Load +1
-; 707                     
-; 709     da 8408_fcec    	jsr	rem_bits_ret,	rem_bits
-; 710                     
-; 712     db 0800_d8dd    	st	line_clr_read_ptr_0,	line_clr_write_ptr_0	; Prep ptr +0
-; 713     dc 0800_d9de    	st	line_clr_read_ptr_1,	line_clr_write_ptr_1	; Prep ptr +1
-; 715     dd 0800_ec00    line_clr_write_ptr_0	st	rem_bits_result+0,	0	; Store +0
-; 716     de 0800_ed00    line_clr_write_ptr_1	st	rem_bits_result+1,	0	; Store +1
-; 717                     
-; 719     df 4880_02d8    	addto	#2,	line_clr_read_ptr_0	; Iterate ptr +0
-; 720     e0 802a_c3d5    	incjne	line_clr_i,	line_clr_loop	; Loop
-; 721     e1 4018_ff00    line_clr_ret	jmp	0		; Return from subroutine
-; 722                     
-; 723                     ; get_full_lines
+; 627     ad 8100_ad00    stamp_piece_ps_val	insn CLRA_INSN	stamp_piece_ps_val,	0	; Self clearing variable stamp_piece_ps_val
+; 628     ae 8080_ad00    stamp_piece_ps_ptr	add	stamp_piece_ps_val,	0	; Piece stage LOAD
+; 630     af 8100_af00    stamp_piece_gb_val	insn CLRA_INSN	stamp_piece_gb_val,	0	; Self clearing variable stamp_piece_gb_val
+; 631     b0 8080_af00    stamp_piece_gb_ptr	add	stamp_piece_gb_val,	0	; Game board LOAD
+; 632                     
+; 634     b1 4018_ff00    stamp_piece_op	jmp	0	; This is set before calling the subroutine
+; 637     b2 0980_adaf    	andto	stamp_piece_ps_val,	stamp_piece_gb_val
+; 638     b3 0062_afba    	jeq	stamp_piece_gb_val,	stamp_piece_loop_end	; If collision didn't occur, keep looping.
+; 641     b4 4018_ffbd    	jmp	stamp_piece_ret		; Break out of loop and exit
+; 645     b5 0880_adaf    	addto	stamp_piece_ps_val,	stamp_piece_gb_val
+; 646     b6 4018_ffb8    	jmp	stamp_piece_writeback
+; 648     b7 09c0_adaf    	bicto	stamp_piece_ps_val,	stamp_piece_gb_val
+; 650     b8 0800_b0b9    	st	stamp_piece_gb_ptr,	stamp_piece_gb_wb_ptr
+; 651     b9 0800_af00    stamp_piece_gb_wb_ptr	st	stamp_piece_gb_val,	0	; Game board STORE
+; 654     ba 8020_ae00    rem_bits_mask	insn INCA_INSN	stamp_piece_ps_ptr,	0	; Variable storage for rem_bits_mask, in rem_bits
+; 655     bb 8020_b000    	insn INCA_INSN	stamp_piece_gb_ptr,	0
+; 656     bc 802a_00ad    	incjne	tmp,	stamp_piece_loop
+; 657     bd 4018_ff00    stamp_piece_ret	jmp	0	; Return from subroutine
+; 658                     
+; 659                     ; --------------------------------------------------------------------------
+; 660                     ; render_board: Renders the gameboard to the console using ASCII characters.
+; 661                     ; --------------------------------------------------------------------------
+; 662                     ;
+; 663                     ; How:
+; 664                     ; Render the gameboard from left to right, top to bottom, to give the most simple console output (avoids ANSI console cursor movement).
+; 665                     ;
+; 666                     ; LOOP A: Starts at top of the board and then switches to bottom half of the board. The gameboard ptr offset changes from 1 to 0. (or 2 -> 1 -> 0 if using a bigger game board)
+; 667                     ; LOOP B: Work down the rows using a single byte bitmask, shifting it right each iteration.
+; 668                     ; LOOP C: Work along the columns from 0 to 10, incrementing the gameboard ptr by 2 each iteration.
+; 669                     ;         Decide whether to render a block or empty character by ANDing the gameboard ptr value with the current bitmask
+; 670                     ;
+; 672     be d800_0d00    get_full_lines_mask	outc	#CR_CHAR		; get_full_lines_mask: variable for get_full_lines
+; 673     bf d800_0a00    	outc	#LF_CHAR
+; 674                     
+; 675     c0 4800_01c5    	st	#(GAMEBOARD_STRIDE-1),	render_board_ptr	; Start the render_board_ptr with an offset of 1 to render the top half of the board.
+; 676                     ; LOOP A
+; 678     c1 4880_0ac5    	addto	#gameboard,	render_board_ptr	; Adjust the render_board_ptr to point into the gameboard. TODO: Move out of loop after implementing ALEB_TOC_INSN below since this won't be changed.
+; 679     c2 4800_80cc    	st	#%1000_0000,	render_board_mask	; Initialize the bitmask for testing the column byte for which row is set
+; 680                     ; LOOP B
+; 682     c3 4800_f6cd    	st	#(-GAMEBOARD_COLS),	render_board_col	; Prepare column loop counter
+; 683                     ; LOOP C
+; 685     c4 0800_cc00    	st	render_board_mask,	tmp
+; 686     c5 8180_0000    render_board_ptr	insn AND_INSN	tmp,	0	; Indirect AND, store result in tmp
+; 689     c6 006a_00c8    	jne	tmp,	render_board_print_a
+; 690     c7 d808_7ec9    	insn OUTC_JMP_INSN	#EMPTY_CHAR,	render_board_print_b	; Print empty char and jump over the block char print
+; 692     c8 d800_2300    line_clr_i	outc	#BLOCK_CHAR		; Used as variable storage for line_clr_i in line_clr
+; 694     c9 4880_02c5    	addto	#GAMEBOARD_STRIDE,	render_board_ptr	; Move onto next column byte
+; 695     ca 802a_cdc4    	incjne	render_board_col,	render_board_loop_c	; If we still have columns to render, continue LOOP C
+; 696                     ; END LOOP C
+; 697     cb 48e0_14c5    	rsbto	#GAMEBOARD_SIZE,	render_board_ptr	; Reset render_board_ptr to pre-loop state
+; 701     cc d800_0d00    render_board_mask	outc	#CR_CHAR		; render_board_mask: The row bitmask for selecting the row to render
+; 702     cd d800_0a00    render_board_col	outc	#LF_CHAR		; render_board_col: The current column iteration loop counter.
+; 703                     
+; 706     ce 820a_ccc3    	insn LSR_JE_INSN	render_board_mask,	render_board_loop_b
+; 707                     ; END LOOP B
+; 710     cf 48e0_0bc5    	rsbto	#(gameboard+1),	render_board_ptr	; TODO: Can replace with ALEB_TOC_INSN + jcs
+; 712     d0 0069_c5c1    	jge	render_board_ptr,	render_board_loop_a	; Otherwise continue LOOP A.
+; 713                     ; END LOOP A
+; 714     d1 4018_ff00    render_board_ret	jmp	0		; Return from subroutine.
+; 715                     
+; 716                     ; --------------------------------------------------
+; 717                     ; line_clr: Clears all full rows from the gameboard.
+; 718                     ; --------------------------------------------------
+; 719                     ;
+; 720                     ; How:
+; 721                     ; 1. Call get_full_lines to generate a bitmask of all the complete rows
+; 722                     ; 2. Call rem_bits on each column in the gameboard with a copy of the complete rows bitmask.
+; 723                     ; 3. Copy the result back over the gameboard.
 ; 724                     ;
-; 725                     ; Generates a 2 byte, 16 bit bitmask indicating which rows in the gameboard are filled.
-; 726                     ; This is the bitwise AND of all columns in the gameboard.
-; 727                     ;
-; 728                     ;get_full_lines_mask	skip	2	; Stored in render_board
-; 730     e2 4800_f600    	st	#(-GAMEBOARD_COLS),	tmp
-; 731     e3 4800_ffb9    	st	#0xFF,	get_full_lines_mask+0
-; 732     e4 4800_ffba    	st	#0xFF,	get_full_lines_mask+1
-; 733     e5 4800_0ae7    	st	#gameboard,	get_full_lines_ptr_0
-; 735     e6 0820_e7e8    	insn INCTO_INSN	get_full_lines_ptr_0,	get_full_lines_ptr_1
-; 736     e7 8180_b900    get_full_lines_ptr_0	insn AND_INSN	get_full_lines_mask+0,	0
-; 737     e8 8180_ba00    get_full_lines_ptr_1	insn AND_INSN	get_full_lines_mask+1,	0
-; 738     e9 4880_02e7    	addto	#2,	get_full_lines_ptr_0
-; 739     ea 802a_00e6    	incjne	tmp,	get_full_lines_loop
-; 740     eb 4018_ff00    get_full_lines_ret	jmp	0		; Return from subroutine
-; 741                     
-; 742                     ; rem_bits
-; 743                     ;
-; 744                     ; Remove the bits from rem_bits_value in the positions they are set in rem_bits_mask.
-; 745                     ; For each bit removed, the more significant bits are shifted right to fill its place.
-; 746                     ; The leftmost most significant bits are filled with zeroes.
-; 747                     ;
-; 748                     ; The output is placed in rem_bits_result.
-; 749                     ; rem_bits_mask and rem_bits_value are zeroed as a result of this process.
-; 750                     ;
-; 751                     ;rem_bits_mask	skip	2	; Stored in stamp_piece
-; 752                     ;rem_bits_value	skip	2	; Stored in line_clr
-; 755     ec 8100_ec00    rem_bits_result	insn CLRA_INSN	rem_bits_result+0,	0	; Self clearing variables
-; 756     ed 8100_ed00    	insn CLRA_INSN	rem_bits_result+1,	0
-; 758     ee 4800_f000    	st	#-16,	tmp	; Loop 16 times
-; 760     ef 0880_b5b5    	lsl	rem_bits_mask+0		; Logical shift left mask (0 -> bit 0)
-; 761     f0 0890_b6b6    	rol	rem_bits_mask+1		; (bit 15 -> carry)
-; 762     f1 0064_00f7    	jcc	rem_bits_A		; GOTO A if carry clear
-; 764     f2 0880_d1d1    	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
-; 765     f3 0890_d2d2    	rol	rem_bits_value+1		; The carry result is discarded.
-; 768     f4 40e0_ffc3    	insn ALEB_TOC_INSN	#-1,	line_clr_i	; If this is the last iteration of rem_bits (last column), store 1 in carry
-; 769     f5 4890_0001    	adcto	#0,	lines_cleared	; Add carry to lines cleared
-; 771     f6 4018_fffb    	jmp	rem_bits_loop_end
-; 773     f7 0880_d1d1    	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
-; 774     f8 0890_d2d2    	rol	rem_bits_value+1		; (bit 15 -> carry)
-; 775     f9 0890_ecec    	rol	rem_bits_result+0		; Rotate left to save the carry into result (carry -> bit 0)
-; 776     fa 0890_eded    	rol	rem_bits_result+1		; Carry from rotating result is discarded.
-; 777     fb 802a_00ef    rem_bits_loop_end	incjne	tmp,	rem_bits_loop	; Loop
-; 778     fc 4018_ff00    rem_bits_ret	jmp	0		; Return from subroutine
-; 779                     
-; 781     fd d808_5800    	insn OUTC_JMP_INSN	#0x58,	stop	; Print 'X' and halt.
-; 782                     
-; 784     0000_00fe       PROGRAM_FREE_SPACE	equ	(256-PROGRAM_SIZE)
-; 785                     
-; 786                     
+; 728                     ; --------------
+; 729                     ; get_full_lines
+; 730                     ; --------------
+; 731                     ; Subroutine inlined to save instructions.
+; 732                     ;
+; 733                     ; Generates a 2 byte, 16 bit bitmask indicating which rows in the gameboard are filled.
+; 734                     ; This is the bitwise AND of all columns in the gameboard.
+; 735                     ;
+; 736                     ;get_full_lines_mask	skip	2	; Stored in render_board
+; 738     d2 4800_f600    	st	#(-GAMEBOARD_COLS),	tmp
+; 739     d3 4800_ffbe    	st	#0xFF,	get_full_lines_mask+0
+; 740     d4 4800_ffbf    	st	#0xFF,	get_full_lines_mask+1
+; 741     d5 4800_0ad7    	st	#gameboard,	get_full_lines_ptr_0
+; 743     d6 0820_d7d8    	insn INCTO_INSN	get_full_lines_ptr_0,	get_full_lines_ptr_1
+; 744     d7 8180_be00    get_full_lines_ptr_0	insn AND_INSN	get_full_lines_mask+0,	0
+; 745     d8 8180_bf00    get_full_lines_ptr_1	insn AND_INSN	get_full_lines_mask+1,	0
+; 746     d9 4880_02d7    	addto	#2,	get_full_lines_ptr_0
+; 747     da 802a_00d6    	incjne	tmp,	get_full_lines_loop
+; 748                     ;get_full_lines_ret	jmp	0		; Return from subroutine
+; 749                     ;-------------------
+; 750                     ; get_full_lines end
+; 751                     ; ------------------
+; 753     db 006a_bede    	jne	get_full_lines_mask+0,	line_clr_do_remove
+; 754     dc 006a_bfde    	jne	get_full_lines_mask+1,	line_clr_do_remove
+; 755     dd 4018_fffd    	jmp	line_clr_ret	; Fastpath to returning from the subroutine
+; 758     de 8100_de00    rem_bits_value	insn CLRA_INSN	rem_bits_value+0,	0	; rem_bits_value: 2 bytes. Variable storage for rem_bits.
+; 759     df 8100_df00    	insn CLRA_INSN	rem_bits_value+1,	0	; Self clearing.
+; 760                     
+; 762     e0 4800_f6c8    	st	#(-GAMEBOARD_COLS),	line_clr_i	; Prep the loop counter
+; 763                     
+; 765     e1 4800_0ae5    	st	#gameboard,	line_clr_read_ptr_0
+; 767                     
+; 768                     ; Line clear loop. It will call rem_bits with the line clear mask and each column of the gameboard.
+; 772     e2 0800_beba    	st	get_full_lines_mask+0,	rem_bits_mask+0	; Prep mask +0
+; 773     e3 0800_bfbb    	st	get_full_lines_mask+1,	rem_bits_mask+1	; Prep mask +1
+; 774                     
+; 776     e4 0820_e5e6    	insn INCTO_INSN	line_clr_read_ptr_0,	line_clr_read_ptr_1	; Prep ptr +1
+; 778     e5 8080_de00    line_clr_read_ptr_0	add	rem_bits_value+0,	0	; Load +0
+; 779     e6 8080_df00    line_clr_read_ptr_1	add	rem_bits_value+1,	0	; Load +1
+; 780                     
+; 783                     ; --------
+; 784                     ; rem_bits
+; 785                     ; --------
+; 786                     ; Subroutine inlined to save instructions.
+; 787                     ;
+; 788                     ; Remove the bits from rem_bits_value in the positions they are set in rem_bits_mask.
+; 789                     ; For each bit removed, the more significant bits are shifted right to fill its place.
+; 790                     ; The leftmost most significant bits are filled with zeroes.
+; 791                     ;
+; 792                     ; The output is placed in rem_bits_result.
+; 793                     ; rem_bits_mask and rem_bits_value are zeroed as a result of this process.
+; 794                     ;
+; 795                     ;rem_bits_mask	skip	2	; Stored in stamp_piece
+; 796                     ;rem_bits_value	skip	2	; Stored in line_clr
+; 799     e7 8100_e700    rem_bits_result	insn CLRA_INSN	rem_bits_result+0,	0	; Self clearing variables
+; 800     e8 8100_e800    	insn CLRA_INSN	rem_bits_result+1,	0
+; 802     e9 4800_f000    	st	#-16,	tmp	; Loop 16 times
+; 804     ea 0880_baba    	lsl	rem_bits_mask+0		; Logical shift left mask (0 -> bit 0)
+; 805     eb 0890_bbbb    	rol	rem_bits_mask+1		; (bit 15 -> carry)
+; 806     ec 0064_00f2    	jcc	rem_bits_A		; GOTO A if carry clear
+; 808     ed 0880_dede    	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
+; 809     ee 0890_dfdf    	rol	rem_bits_value+1		; The carry result is discarded.
+; 812     ef 40e0_ffc8    	insn ALEB_TOC_INSN	#-1,	line_clr_i	; If this is the last iteration of rem_bits (last column), store 1 in carry
+; 813     f0 4890_0001    	adcto	#0,	lines_cleared	; Add carry to lines cleared
+; 815     f1 4018_fff6    	jmp	rem_bits_loop_end
+; 817     f2 0880_dede    	lsl	rem_bits_value+0		; Logical shift left value (0 -> bit 0)
+; 818     f3 0890_dfdf    	rol	rem_bits_value+1		; (bit 15 -> carry)
+; 819     f4 0890_e7e7    	rol	rem_bits_result+0		; Rotate left to save the carry into result (carry -> bit 0)
+; 820     f5 0890_e8e8    	rol	rem_bits_result+1		; Carry from rotating result is discarded.
+; 821     f6 802a_00ea    rem_bits_loop_end	incjne	tmp,	rem_bits_loop	; Loop
+; 822                     ;rem_bits_ret	jmp	0		; Return from subroutine
+; 823                     ; ------------
+; 824                     ; rem_bits end
+; 825                     ; ------------
+; 827     f7 0800_e5f9    	st	line_clr_read_ptr_0,	line_clr_write_ptr_0	; Prep ptr +0
+; 828     f8 0800_e6fa    	st	line_clr_read_ptr_1,	line_clr_write_ptr_1	; Prep ptr +1
+; 830     f9 0800_e700    line_clr_write_ptr_0	st	rem_bits_result+0,	0	; Store +0
+; 831     fa 0800_e800    line_clr_write_ptr_1	st	rem_bits_result+1,	0	; Store +1
+; 832                     
+; 834     fb 4880_02e5    	addto	#2,	line_clr_read_ptr_0	; Iterate ptr +0
+; 835     fc 802a_c8e2    	incjne	line_clr_i,	line_clr_loop	; Loop
+; 836     fd 4018_ff00    line_clr_ret	jmp	0		; Return from subroutine
+; 837                     
+; 838                     ; ---------------------------------
+; 839                     ; game_over: End the game and halt.
+; 840                     ; ---------------------------------
+; 842     fe d808_5800    	insn OUTC_JMP_INSN	#0x58,	stop	; Print 'X' and halt.
+; 843                     
+; 845     0000_00ff       PROGRAM_FREE_SPACE	equ	(256-PROGRAM_SIZE)
+; 846                     
+; 847                     
 
 ; 0 errors detected in pass 2
 
@@ -550,10 +602,9 @@
 ; ALEB_TOC_INSN = 0xe00000
 ; ALTB_TOC_INSN = 0xc00000
 ; AND_INSN = 0x81800000
-; BAR_CHAR = 0x7c
 ; BLOCK_CHAR = 0x23
 ; CLRA_INSN = 0x81000000
-; CLRJMP_INSN = 0x81080000
+; CLR_JMP_INSN = 0x81080000
 ; CR_CHAR = 0xd
 ; EMPTY_CHAR = 0x7e
 ; GAMEBOARD_COLS = 0xa
@@ -561,49 +612,51 @@
 ; GAMEBOARD_STRIDE = 0x2
 ; IMADD_INSN = 0xc0800000
 ; INCA_INSN = 0x80200000
-; INCJMP_INSN = 0x80280000
 ; INCTO_INSN = 0x8200000
+; INC_JMP_INSN = 0x80280000
 ; I_PIECE = 0xf0
-; I_PIECE_FLIP = 0xf0
-; J_PIECE = 0x71
-; J_PIECE_FLIP = 0x47
+; I_PIECE_FLIP = 0xf
+; J_PIECE = 0xe2
+; J_PIECE_FLIP = 0x8e
 ; LF_CHAR = 0xa
-; LSR_JCC_INSN = 0x820a0000
-; L_PIECE = 0x17
-; L_PIECE_FLIP = 0x74
+; LSRO_JMP_INSN = 0x82280000
+; LSR_JE_INSN = 0x820a0000
+; L_PIECE = 0xe8
+; L_PIECE_FLIP = 0x2e
+; OTOC_INSN = 0x2000000
 ; OUTC_JMP_INSN = 0x98080000
-; O_PIECE = 0x66
-; O_PIECE_FLIP = 0x66
+; O_PIECE = 0xcc
+; O_PIECE_FLIP = 0xcc
 ; PIECE_STAGE_SIZE = 0x8
-; PIECE_X_OFFSET = 0x3
-; PROGRAM_FREE_SPACE = 0x2
-; PROGRAM_SIZE = 0xfe
-; SPACE_CHAR = 0x20
+; PIECE_X_OFFSET = 0x4
+; PROGRAM_FREE_SPACE = 0x1
+; PROGRAM_SIZE = 0xff
+; STC_INSN = 0x8100000
+; STNC_INSN = 0x8300000
 ; ST_JMP_INSN = 0x8080000
-; S_PIECE = 0x36
-; S_PIECE_FLIP = 0x36
-; T_PIECE = 0x27
-; T_PIECE_FLIP = 0x72
-; Z_PIECE = 0x63
-; Z_PIECE_FLIP = 0x63
-; game_over = 0xfd
+; S_PIECE = 0x6c
+; S_PIECE_FLIP = 0x6c
+; T_PIECE = 0xe4
+; T_PIECE_FLIP = 0x4e
+; Z_PIECE = 0xc6
+; Z_PIECE_FLIP = 0xc6
+; game_over = 0xfe
 ; gameboard = 0xa
-; get_full_lines = 0xe2
-; get_full_lines_loop = 0xe6
-; get_full_lines_mask = 0xb9
-; get_full_lines_ptr_0 = 0xe7
-; get_full_lines_ptr_1 = 0xe8
-; get_full_lines_ret = 0xeb
+; get_full_lines = 0xd2
+; get_full_lines_loop = 0xd6
+; get_full_lines_mask = 0xbe
+; get_full_lines_ptr_0 = 0xd7
+; get_full_lines_ptr_1 = 0xd8
 ; hard_drop_flag = 0x21
-; line_clr = 0xcd
-; line_clr_do_remove = 0xd1
-; line_clr_i = 0xc3
-; line_clr_loop = 0xd5
-; line_clr_read_ptr_0 = 0xd8
-; line_clr_read_ptr_1 = 0xd9
-; line_clr_ret = 0xe1
-; line_clr_write_ptr_0 = 0xdd
-; line_clr_write_ptr_1 = 0xde
+; line_clr = 0xd2
+; line_clr_do_remove = 0xde
+; line_clr_i = 0xc8
+; line_clr_loop = 0xe2
+; line_clr_read_ptr_0 = 0xe5
+; line_clr_read_ptr_1 = 0xe6
+; line_clr_ret = 0xfd
+; line_clr_write_ptr_0 = 0xf9
+; line_clr_write_ptr_1 = 0xfa
 ; lines_cleared = 0x1
 ; main = 0x1
 ; main_check_collision = 0x38
@@ -621,26 +674,29 @@
 ; main_next_piece = 0x20
 ; main_read_input = 0x4d
 ; main_render_fresh_piece = 0x2c
-; main_rot_left = 0x68
-; main_rot_right = 0x67
+; main_rot_left = 0x67
+; main_rot_right = 0x68
 ; main_save_piece_state = 0x3b
 ; main_stamp_piece_end = 0x4d
 ; main_stamp_piece_only = 0x48
 ; main_undo_then_render = 0x28
-; piece_kind = 0x2
-; piece_rotation = 0x3
+; new_game = 0x1
+; piece_kind = 0x3
+; piece_rotation = 0x4
 ; piece_stage = 0x2c
-; piece_x = 0x4
-; piece_y = 0x5
+; piece_x = 0x5
+; piece_y = 0x6
 ; prep_piece = 0x6c
-; prep_piece_hor = 0x89
+; prep_piece_hor = 0x8d
 ; prep_piece_hor_i = 0x71
-; prep_piece_hor_loop_a = 0x8a
-; prep_piece_hor_loop_b = 0x8b
-; prep_piece_hor_ptr = 0x8c
-; prep_piece_hor_wb_ptr = 0x8e
+; prep_piece_hor_inel = 0x8f
+; prep_piece_hor_loop_a = 0x90
+; prep_piece_hor_loop_b = 0x91
+; prep_piece_hor_ptr = 0x91
+; prep_piece_hor_wb_ptr = 0x94
+; prep_piece_is_flipped = 0x91
 ; prep_piece_jmp = 0x72
-; prep_piece_ret = 0x93
+; prep_piece_ret = 0x98
 ; prep_piece_target = 0x71
 ; prep_piece_value = 0x80
 ; prep_piece_vert = 0x82
@@ -648,77 +704,76 @@
 ; prev_piece_rotation = 0x25
 ; prev_piece_x = 0x26
 ; prev_piece_y = 0x27
-; rem_bits = 0xec
-; rem_bits_A = 0xf7
-; rem_bits_loop = 0xef
-; rem_bits_loop_end = 0xfb
-; rem_bits_mask = 0xb5
-; rem_bits_result = 0xec
-; rem_bits_ret = 0xfc
-; rem_bits_value = 0xd1
-; render_board = 0xb9
-; render_board_col = 0xc8
-; render_board_loop_a = 0xbc
-; render_board_loop_b = 0xbe
-; render_board_loop_c = 0xbf
-; render_board_mask = 0xc7
-; render_board_print_a = 0xc3
-; render_board_print_b = 0xc4
-; render_board_ptr = 0xc0
-; render_board_ret = 0xcc
-; rendering_off_flag = 0x7
-; shift_piece = 0x94
-; shift_piece_loop = 0x95
-; shift_piece_ret = 0xa2
+; rem_bits = 0xe7
+; rem_bits_A = 0xf2
+; rem_bits_loop = 0xea
+; rem_bits_loop_end = 0xf6
+; rem_bits_mask = 0xba
+; rem_bits_result = 0xe7
+; rem_bits_value = 0xde
+; render_board = 0xbe
+; render_board_col = 0xcd
+; render_board_loop_a = 0xc1
+; render_board_loop_b = 0xc3
+; render_board_loop_c = 0xc4
+; render_board_mask = 0xcc
+; render_board_print_a = 0xc8
+; render_board_print_b = 0xc9
+; render_board_ptr = 0xc5
+; render_board_ret = 0xd1
+; rendering_off_flag = 0x2
+; shift_piece = 0x99
+; shift_piece_loop = 0x9a
+; shift_piece_ret = 0xa7
 ; stamp_flag = 0x20
-; stamp_piece = 0xa3
-; stamp_piece_clear_op = 0xb2
-; stamp_piece_coll_op = 0xad
-; stamp_piece_gb_ptr = 0xab
-; stamp_piece_gb_val = 0xaa
-; stamp_piece_gb_wb_ptr = 0xb4
-; stamp_piece_loop = 0xa8
-; stamp_piece_loop_end = 0xb5
-; stamp_piece_merge_op = 0xb0
-; stamp_piece_op = 0xac
-; stamp_piece_ps_ptr = 0xa9
-; stamp_piece_ps_val = 0xa8
-; stamp_piece_ret = 0xb8
-; stamp_piece_writeback = 0xb3
+; stamp_piece = 0xa8
+; stamp_piece_clear_op = 0xb7
+; stamp_piece_coll_op = 0xb2
+; stamp_piece_gb_ptr = 0xb0
+; stamp_piece_gb_val = 0xaf
+; stamp_piece_gb_wb_ptr = 0xb9
+; stamp_piece_loop = 0xad
+; stamp_piece_loop_end = 0xba
+; stamp_piece_merge_op = 0xb5
+; stamp_piece_op = 0xb1
+; stamp_piece_ps_ptr = 0xae
+; stamp_piece_ps_val = 0xad
+; stamp_piece_ret = 0xbd
+; stamp_piece_writeback = 0xb8
 ; stop = 0x0
 ; tmp = 0x0
-; undo_retry_count = 0x6
+; undo_retry_count = 0x7
 
 ; Memory image:
 00: c810ff00 81000100 81000200 81000300 81000400 81000500 81000600 81000700
 08: 000000ff 000000ff 81000a00 81000b00 81000c00 81000d00 81000e00 81000f00
 10: 81001000 81001100 81001200 81001300 81001400 81001500 81001600 81001700
 18: 81001800 81001900 81001a00 81001b00 81001c00 81001d00 000000ff 000000ff
-20: 81002000 81002100 40e00602 48900102 49800702 81002500 81002600 81002700
-28: 802206fd 08002503 08002604 08002705 81002c00 81002d00 81002e00 81002f00
-30: 81003000 81003100 81003200 81003300 8408936c 08000500 8408a294 006a2040
-38: 4800adac 8408b8a3 006a0028 08000325 08000426 08000527 006a215f 48000020
-40: 4800fe06 006a0748 4800b0ac 8408b8a3 8408ccb9 006a204b 4800b2ac 8408b8a3
-48: 0062204d 4800b0ac 8408b8a3 8408e1cd 4018ff20 e8000000 49800f00 08600000
-50: 00620042 48800100 8022005f 48800100 80220065 48800100 80220066 80220068
-58: 80220069 80220067 8022006a 8022006b 80220001 802200fd d8083f4d 48e00105
-60: 4800ff00 8408a294 00620064 80282040 80282038 48e00204 80280438 48e00203
-68: 8028032c 8028215f 8108074d 8028074d 48007271 0a000300 0a000000 08900271
-70: 08800271 4018ff00 48086680 48086680 4808f080 4808f080 48082780 48087280
-78: 48083680 48083680 48086380 48086380 48087180 48084780 48081780 48087480
-80: 4010ff00 02020389 08008031 4980f031 4800fc00 08808080 802a0085 0800802f
-88: 4018ff93 4800fd71 4800338c 08008c8e c0800000 0a008080 0a100000 48e0028c
-90: 40e02c8c 006c008b 802a718a 4018ff00 006200a2 020232a2 020230a2 02022ea2
-98: 02022ca2 0a003333 0a103232 0a003131 0a103030 0a002f2f 0a102e2e 0a002d2d
-a0: 0a102c2c 802a0095 4018ff00 48002ca9 480010ab 088004ab 088004ab 4800f800
-a8: 8100a800 8080a800 8100aa00 8080aa00 4018ff00 0980a8aa 0062aab5 4018ffb8
-b0: 0880a8aa 4018ffb3 09c0a8aa 0800abb4 0800aa00 8020a900 8020ab00 802a00a8
-b8: 4018ff00 d8000d00 d8000a00 480001c0 48800ac0 480080c7 4800f6c8 0800c700
-c0: 81800000 006a00c3 d8087ec4 d8002300 488002c0 802ac8bf 48e014c0 d8000d00
-c8: d8000a00 820ac7be 48e00bc0 0069c0bc 4018ff00 8408ebe2 006ab9d1 006abad1
-d0: 4018ffe1 8100d100 8100d200 4800f6c3 48000ad8 0800b9b5 0800bab6 0820d8d9
-d8: 8080d100 8080d200 8408fcec 0800d8dd 0800d9de 0800ec00 0800ed00 488002d8
-e0: 802ac3d5 4018ff00 4800f600 4800ffb9 4800ffba 48000ae7 0820e7e8 8180b900
-e8: 8180ba00 488002e7 802a00e6 4018ff00 8100ec00 8100ed00 4800f000 0880b5b5
-f0: 0890b6b6 006400f7 0880d1d1 0890d2d2 40e0ffc3 48900001 4018fffb 0880d1d1
-f8: 0890d2d2 0890ecec 0890eded 802a00ef 4018ff00 d8085800
+20: 81002000 81002100 40e00603 48900103 49800703 81002500 81002600 81002700
+28: 802207fe 08002504 08002605 08002706 81002c00 81002d00 81002e00 81002f00
+30: 81003000 81003100 81003200 81003300 8408986c 08000600 8408a799 006a2040
+38: 4800b2b1 8408bda8 006a0028 08000425 08000526 08000627 006a215f 48000020
+40: 4800fe07 006a0248 4800b5b1 8408bda8 8408d1be 006a204b 4800b7b1 8408bda8
+48: 0062204d 4800b5b1 8408bda8 8408fdd2 4018ff20 e8000000 49800f00 08600000
+50: 00620042 48800100 8022005f 48800100 80220065 48800100 80220066 80220067
+58: 80220069 80220068 8022006a 8022006b 80220001 802200fe d8083f4d 48e00106
+60: 4800ff00 8408a799 00620064 80282040 80282038 48e00205 80280538 48e00204
+68: 8028042c 8228215f 8108024d 8228024d 08000371 0a000491 02009100 08900371
+70: 48807271 4018ff00 4808f080 48080f80 4808cc80 4808cc80 4808e480 48084e80
+78: 48086c80 48086c80 4808e280 48088e80 4808c680 4808c680 4808e880 48082e80
+80: 4010ff00 020a048d 0800802f 4980f02f 4800fc00 08808080 802a0085 0800802d
+88: 02020398 020a9198 08002f31 08002d2f 81082d98 0202038f 02009100 4810fd71
+90: 48003391 c0800000 08009194 0a008080 0a100000 48e00291 40e22c91 802a7190
+98: 4018ff00 006200a7 020232a7 020230a7 02022ea7 02022ca7 0a003333 0a103232
+a0: 0a003131 0a103030 0a002f2f 0a102e2e 0a002d2d 0a102c2c 802a009a 4018ff00
+a8: 48002cae 480012b0 088005b0 088005b0 4800f800 8100ad00 8080ad00 8100af00
+b0: 8080af00 4018ff00 0980adaf 0062afba 4018ffbd 0880adaf 4018ffb8 09c0adaf
+b8: 0800b0b9 0800af00 8020ae00 8020b000 802a00ad 4018ff00 d8000d00 d8000a00
+c0: 480001c5 48800ac5 480080cc 4800f6cd 0800cc00 81800000 006a00c8 d8087ec9
+c8: d8002300 488002c5 802acdc4 48e014c5 d8000d00 d8000a00 820accc3 48e00bc5
+d0: 0069c5c1 4018ff00 4800f600 4800ffbe 4800ffbf 48000ad7 0820d7d8 8180be00
+d8: 8180bf00 488002d7 802a00d6 006abede 006abfde 4018fffd 8100de00 8100df00
+e0: 4800f6c8 48000ae5 0800beba 0800bfbb 0820e5e6 8080de00 8080df00 8100e700
+e8: 8100e800 4800f000 0880baba 0890bbbb 006400f2 0880dede 0890dfdf 40e0ffc8
+f0: 48900001 4018fff6 0880dede 0890dfdf 0890e7e7 0890e8e8 802a00ea 0800e5f9
+f8: 0800e6fa 0800e700 0800e800 488002e5 802ac8e2 4018ff00 d8085800
