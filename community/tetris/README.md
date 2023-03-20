@@ -1,6 +1,6 @@
-# Tetris
+# Relaytris
 
-A Tetris clone implementation for the single board relay computer.
+A Tetris-like game implementation for the single board relay computer.
 
 ## Memory Map
 
@@ -40,6 +40,16 @@ f8: 0800e6fa 0800e700 0800e800 488002e5 802ac8e2 4018ff00 d8085800
 ```
 
 Total instructions: 255/256
+
+## Why?
+
+I wrote this as a technical demonstration of the relay computer's capabilities, basically just to prove that it could actually be done. Despite only having 256 instruction words and a tiny CPU made from 83 relays, it can implement a full tetris-like game, albiet very slowly.
+
+This implementation also serves as a reference template for getting tetris-like games running on other highly constrained platforms. The techniques developed for this project should be easily ported to any CPU that has a basic ALU with a right shift instruction, making it ideal for old, esoteric, memory constrained computers. For my next project, I have my sights on an Intel 4004, and as far as I can tell nobody has written an actual tetris clone for it yet...
+
+## Tetris-like clone
+
+Legally, this game isn't actually Tetris. Even though it shares some of the non-copyrightable gameplay elements, it lacks a tetris license, as well as many of the key characteristics that would make it a real Tetris game, like coloured tetrominos, the modern rotation system, piece randomization, the modern gameboard size, a ghost piece, next-piece previews, a modern scoring system, any of the standard game modes, and most importantly, it lacks realtime gameplay. Therefore, this should be considered as strictly a tetris-like game implementation, aka a tetris clone. It was created purely as an educational technical demonstration for an esoteric platform and not as a commercial game.
 
 ## Assembling the game
 
@@ -108,33 +118,33 @@ The lines cleared count is stored at address `0x01`
 
 ### Features:
 
-* All 6 tetrominos are included
+* All 7 tetrominos are included
 * Tetrominos rotate with a passable rotation system
-* Collisions with the edges and bottom of the gameboard are handled
+* Collisions with the sides and bottom of the gameboard are handled
 * Collisions with the existing pieces on the gameboard are handled
-* Line clearing is handled
-* The number of lines cleared is maintained as the score
-* Game over when new piece collides with existing pieces
-* Hard drop
-* Toggle gameboard rendering to improve speed
+* Line clearing is handled and lines counted for scoring
+* The total number of lines cleared is maintained as the score
+* Game over when a new piece cannot be spawned because it collides with existing pieces on the board
+* Hard drop (automatically loops piece down until a collision occurs)
+* Toggle gameboard rendering (Automatic rendering can be turned off to improve game speed on real hardware)
 
 ### Limitations and areas for improvement
 
-* Tetrominos are not randomly selected and instead simply cycle non-randomly. If anyone knows an rng algorithm that can pick a number from 0->6 in ~3 instructions, let me know!
+* Tetrominos are not randomly selected and instead simply cycle non-randomly (order is: I, O, T, S, J, Z, L). If anyone knows an rng algorithm that can pick a number from 0->6 in ~3 instructions, let me know!
 
-* Technically the Tetris gameboard is supposed to be at least 10x20, but the game only renders 10x16. This is because the gameboard is two bytes high and rendering 10x24 would take considerably more storage and instructions, so 10x16 will have to do.
+* Technically the official Tetris gameboard is supposed to be at least 10x20 tall (modern is usually 10x40), but the game only renders a shorter 10x16. This is because the gameboard is two bytes in height, and rendering 10x24 would require three bytes, and take considerably more storage and instructions because of the extra indirect loading and bit shift code required. 10x16 will have to do and is still very playable.
 
-* There are no wallkicks for rotation or anything fancy from modern Tetris. An illegal spin is prevented to avoid collision, but the game will not move the piece to help you accomplish a rotation. An exception to this is collisions with the floor, which *will* actually kick the piece up due to how piece rendering is handled.
+* There are no wallkicks for rotation or anything fancy from modern official Tetris. An illegal spin is prevented to avoid collision, but the game will not move the piece ("wallkick") to help you accomplish a rotation. An exception to this is downwards collisions with the floor (and only the floor), which *will* actually kick the piece up ("floorkick") due to the way piece rendering is handled.
 
-* Slow on real hardware!
+* The game is extremely slow on real hardware! Disabling automatic piece rendering helps.
 
 ### Implementation
 
 #### Minimising instruction count
 
-To save instruction space, many instructions are used as both instructions *and* variable storage. Any instruction that doesn't use its `bb` value for something (i.e. the `ben` bit is disabled and the instruction doesn't jump) is available to use as storage, since its `bb` value is ignored anyway. Using this technique, the game manages to have no `skip` directives, since all variables are stored hidden within other instructions.
+To save instruction space, many instructions are used as both instructions *and* variable storage. Any instruction that doesn't use its `bb` value for something (i.e. any instruction where the `ben` bit is disabled and the instruction doesn't jump) is available to use as storage, since its `bb` value is ignored. Using this technique, the game manages to have no `skip` directives (no variables are stored in halt instructions with the exception of 0x00), since all variables are stored in the bb value within other instructions.
 
-A particularly useful and easy example of this is the `CLRA_INSN` (`0x8100aabb`) instruction, which writes `0x00` to `[aa]` without using `bb` at all. This allows for a variable to clear itself when executed.
+A particularly useful example of this is the `CLRA_INSN` (`0x8100aabb`) instruction, which writes `0x00` to `[aa]` without using `bb`. When `aa` is set to the address of the instruction itself, it allows for a "variable storage" instruction to clear itself when executed. Since variables usually have to be cleared before use anyway, this saves an entire instruction.
 
 For example:
 
@@ -142,83 +152,11 @@ For example:
 
 `the_variable` is now a variable for `bb` storage, and it will also clear `the_variable` when executed as an instruction. Since many variables need to be initialized to zero, this saves an entire instruction compared to using a `clr` instruction and a separate `skip` or `halt` instruction to store the variable.
 
-Another example is `outc`. `outc` writes the value of `[aa]` to the console, but it doesn't use `bb` in any way. This means that every `outc` instruction can also be used as a variable storage, which can save a few instructions in a text-baed application that uses `outc` a lot.
-
-#### Game loop
-
-```
-main:
-    clear gameboard and all state
-main_next_piece:
-    clear stamp flag
-    clear hard drop flag
-    select next piece_kind and set initial position and rotation in the undo buffer
-main_undo_then_render:
-    increment undo_retry_count
-    If undo_retry_count == 0:
-        print 'X'
-        halt
-    restore the saved piece position from the undo buffer
-main_render_fresh_piece:
-    clear the piece stage
-    render the current piece to the piece stage in its current rotation and location in x and y
-main_check_collision:
-    check if the piece stage is currently colliding with the gameboard
-    If collision with gameboard:
-        GOTO main_undo_then_render
-    reset the undo_retry_count to -2
-main_full_render:
-    stamp the piece stage to the gameboard
-    print the gameboard to console
-    If stamp flag is set:
-        clear any full lines in the gameboard. This also updates the lines_cleared score.
-        GOTO main_next_piece
-main_full_render_clr:
-    clear the piece stage back off the gameboard
-    save current piece state to the undo buffer
-main_read_input:
-    wait for user input (2, 4, 6, 7, 8, 9)
-    If user input 2 (move down):
-main_move_drop:
-        piece_y--
-        shift piece_stage down by 1
-        If collision with floor:
-            set stamp flag
-            GOTO main_full_render
-        check collision with gameboard
-        If collision with gameboard:
-            set stamp flag
-            GOTO main_undo_then_render
-        If hard_drop_flag set:
-            store piece_y in undo buffer prev_piece_y
-            GOTO main_move_drop (redo this move down sequence)
-        Else:
-            main_full_render
-    If user input 4 (move left):
-        piece_x--
-        GOTO main_check_collision
-    Else If user input 6 (move right):
-        piece_x++
-        GOTO main_check_collision
-    Else If user input 7 (rotate left):
-        piece_rotation--
-        GOTO main_render_fresh_piece
-    Else If user input 8 (hard drop):
-        set hard_drop_flag
-        GOTO main_move_drop
-    Else If user input 9 (rotate right):
-        piece_rotation++
-        GOTO main_render_fresh_piece
-    Else:
-        print '?'
-        GOTO main_read_input
-```
+Another example is `outc`. `outc` writes the value of `[aa]` to the console, but it doesn't use `bb` in any way. This means that every `outc` instruction can also be used as a variable storage, which can save a few instructions in text-baed applications that use `outc` a lot.
 
 #### Gameboard
 
-The game renders a 10x16 gameboard using ASCII characters on the serial console using `outc`. The gameboard is rendered using '~' characters for empty cells, and '#' characters for filled cells. CR+LF is used for newlines.
-
-The gameboard is represented by 20 bytes. The bytes are stacked vertically with the even numbered, lower address bytes on the bottom, and the odd numbered, higher address bytes on the top. The bytes are oriented with their lowest significant bits downwards, so bit 0 is at the bottom, and bit 7 is at the top.
+The gameboard is represented by 20 bytes. The bytes are stacked on top of each other vertically, with the even numbered, lower address bytes on the bottom, and the odd numbered, higher address bytes on the top. The bytes are oriented with their lowest significant bits towards the bottom, so bit 0 is towards bottom, and bit 7 is towards the top.
 
 #### Gameboard layout (byte.bit):
 
@@ -243,17 +181,17 @@ The gameboard is represented by 20 bytes. The bytes are stacked vertically with 
 
 #### Line clearing
 
-Line clearing is accomplished by generating a bitmask for the lines to be cleared. This is done by bitwise ANDing all of the gameboard columns together. The result is a 16 bit mask with 1s in all the locations where lines should be cleared, and 0s everywhere else.
+Line clearing is accomplished by first generating a bitmask for the lines to be cleared. This is done by bitwise ANDing all of the gameboard columns together. The result is a 2 byte (16 bit) mask with 1s in all of the locations where rows should be cleared, and 0s where rows should be maintained.
 
-The line clear bitmask is then used against each column in a rotation algorithm that shift rotates the mask and column in sync, discarding bits from the column when the mask is 1. In this way, all the lines are cleared.
+The columns are then iterated over. The line clear bitmask, along with the current gameboard column, are copied for the function `rem_bits` to work on. `rem_bits` uses a bitshift rotation algorithm to remove the required bits from the gamebaord column. It does this by left rotating the line clear mask and checking the carry value. If the carry was clear, the gameboard column is left rotated, and then the carried bit is left rotated into the result value, so that the gameboard bit is remembered. If the carry was set, the gameboard column is left rotated, but the result is not rotated and the bit is discarded.
 
 #### Piece rendering
 
-Pieces are represented by a single byte constant. The lower 4 bits are half the piece, and the upper 4 bits are the other half. A mirrored version of the piece is also available to make rotations efficient, halving the amount of piece rendering code required.
+Pieces are represented in code by a single byte constant. The lower 4 bits are the left vertical slice of the piece, and the upper 4 bits are right vertical slice. A mirrored version of the piece is included to make piece rotations efficient, halving the amount of piece rendering code required.
 
-Pieces are rendered to an intermediary `piece_stage` buffer, which is the same format as the gameboard, but only 4x16 (8 bytes) in size. The piece stage only needs to be 4 columns wide since this is the widest any piece can be in any orientation.
+The active piece is first rendered to an intermediary `piece_stage` buffer, which is laid out in the same format as the gameboard. However, the piece stage is only 4x16 squares (8 bytes) in size. The piece stage only needs to be 4 columns wide since this is the widest any piece can be in any orientation. The entire piece stage can be shifted left or right over the gameboard using simple pointer arithmatic using the `piece_x` value.
 
-If the piece is an I, T, J, L piece (i.e. `piece_kind` is even) its position is tweaked so that it rotates about an axis correctly. 
+Additionally, if the piece is an I, T, J, L piece (i.e. `piece_kind` index is even) its position is tweaked so that it rotates about an axis correctly.
 
 #### Piece stage layout (byte.bit):
 
@@ -276,27 +214,48 @@ If the piece is an I, T, J, L piece (i.e. `piece_kind` is even) its position is 
 0.0 2.0 4.0 6.0
 ```
 
-The piece is rendered into the `piece_stage` either vertically or horizontally, depending on whether the `piece_rotation` value is even or odd. If the second bit of the `piece_rotation` is set, the mirrored version of the piece is used. The piece constant value is shifted into the top of the piece stage. The entire piece stage is then shifted downwards in a loop to move the piece into its `piece_y` coordinate.
+The piece is rendered into the `piece_stage` by the function `prep_piece`. It is rendered either vertically or horizontally, depending on whether the `piece_rotation` value is even or odd. If the second bit of the `piece_rotation` is set, the mirrored version of the piece is used by incrementing the piece template index by 1. The piece constant value is shifted into the top of the piece stage. Finally, the entire piece stage is shifted downwards in a loop to move the piece into the correct `piece_y` position.
 
 Moving the piece left and right is accomplished by simply adjusting the `piece_x` value. The subroutine that relates the `piece_stage` to the gameboard uses pointer arithmetic to take `piece_x` into account when comparing the gameboard to the `piece_stage`.
 
 #### Applying the piece stage to the gameboard
 
-A single subroutine `stamp_piece` is responsible for all operations that involve relating the piece stage to the gameboard. It operates in three modes, chosen by setting the value of `stamp_piece_op`:
+A single subroutine `stamp_piece` is responsible for all operations involving relating the piece stage to the gameboard. A single function is used for three separate operations to save on instructions, since most of the code is simply pointer arithmatic and doing indirect loads and stores of the piece stage and gameboard. The code that relates the two then only needs to operate on the loaded values.
 
-##### Merge (`#stamp_piece_merge_op`)
+`stamp_piece` operates in three modes, chosen by setting the value of `stamp_piece_op` to an inner subroutine address:
 
-The piece stage is added to the gameboard. Any bits set in the piece stage will be set (`addto`) in the gameboard, effectively "stamping" the piece down onto the board.
+##### Gameboard Merge (`stamp_piece_op = #stamp_piece_merge_op`)
 
-##### Clear (`#stamp_piece_clear_op`)
+The piece stage is stamped to the gameboard. Any bits set in the piece stage will be added (`addto`) to the gameboard, effectively "stamping" the piece down onto the gameboard.
 
-The piece stage is cleared from the gameboard. Any bits set in the piece stage are cleared (`bicto`) the gameboard, effectively "clearing" the piece from the board.
+In order to save an instruction, the gameboard is not cleared (`bicto`) before the add is performed. This requires that the gameboard has the piece destination bits pre-cleared, in order to not trigger a carry in the add (which would cause an incorrect result). This is fine, since the gameboard is always pre-cleared before performing this operation.
 
-##### Collision detect (`#stamp_piece_coll_op`)
+##### Clear (`stamp_piece_op = #stamp_piece_clear_op`)
 
-The piece stage is compared with the gameboard for any overlapping bits. If any bits are present in both the gameboard and the piece stage (`andto` result > 0), `tmp` is set to a non-zero value.
+The piece stage is bitcleared from the gameboard. Any bits set in the piece stage are cleared (`bicto`) from the gameboard, effectively erasing the piece from the board.
 
+##### Collision detect (`stamp_piece_op = #stamp_piece_coll_op`)
 
+The piece stage is compared with the gameboard for any overlapping bits. If any bits are present in both the gameboard and the piece stage (`andto` result > 0), `tmp` is set to a non-zero value, indicating a collision has occured.
+
+#### Gameboard scanout
+
+The game renders the 10x16 gameboard using ASCII characters on the serial console using `outc`. The gameboard is rendered using '~' characters for empty cells, and '#' characters for filled cells. CR+LF (`\r\n`) is used for newlines.
+
+The gameboard is scanned out from top to bottom, left to right. Even though this is difficult due to the bottom-to-top layout of the gameboard, it allows the least amount of characters to be output to the terminal by only requiring the newline character to change lines. It avoids any special ANSII terminal cursor movement commands, which saves a large number of `outc` instructions.
+
+Scanout is accomplished using the following steps:
+
+1. The current piece stage is "stamped" to the gameboard using `stamp_piece` with `stamp_piece_op = #stamp_piece_merge_op`.
+2. The gameboard is rendered by the function `render_board`, using three nested loops to shift a sliding bitmask with a single bit set which represents the current row cell being rendered. The bitmask is ANDed with each gameboard column. When the bitmask and the current gameboard column AND > 0, the current cell is set. Then, the bitmask is shifted to move down to the next row.
+3. If the last move was a collision, the `stamp_flag` variable is set. Rendering ends and the piece is left on the gameboard.
+4. If the last move did not result in a downwards collision, `stamp_flag` is unset. The current piece is cleared back off the gameboard using `stamp_piece` with `stamp_piece_op = #stamp_piece_clear_op`.
+
+#### Game over
+
+If a collission occurs while spawning a new piece, the game will get stuck in an infinite loop of detecting a collision, trying to undo the piece state to the last known good state, re-rendering the piece top the old state, and then re-detecting the same collision because the undo state is the same as the piece spawn location.
+
+To guard against this, an `undo_retry_count` variable is set to -2 every time a piece is successfully positioned without a collision. `undo_retry_count` is then incremented every time the game performs an "undo". If the count reaches 0 (2 consecutive undo loops), `game_over` is triggered and the game ends.
 
 ### Custom instructions
 
